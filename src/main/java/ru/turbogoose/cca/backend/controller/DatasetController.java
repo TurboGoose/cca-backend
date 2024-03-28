@@ -38,7 +38,7 @@ public class DatasetController {
         return datasetService.renameDataset(id, newName);
     }
 
-    @DeleteMapping(value = "/datasets/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @DeleteMapping(value = "/datasets/{id}")
     public void deleteDataset(@PathVariable int id) {
         datasetService.deleteDataset(id);
     }
