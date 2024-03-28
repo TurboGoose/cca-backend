@@ -46,4 +46,9 @@ public class LabelService {
         labelRepository.save(label); // DataIntegrityViolationException on duplicate label name
         return label;
     }
+
+    @Transactional
+    public void deleteLabel(int labelId) {
+        labelRepository.deleteById(labelId);
+    }
 }

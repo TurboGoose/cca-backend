@@ -28,4 +28,9 @@ public class LabelController {
     public Label renameLabel(@PathVariable int labelId, @RequestParam String newName) {
         return labelService.renameLabel(labelId, newName);
     }
+
+    @DeleteMapping(value = "/{labelId}")
+    public void deleteLabel(@PathVariable int labelId) {
+        labelService.deleteLabel(labelId);
+    }
 }
