@@ -54,4 +54,9 @@ public class DatasetService {
         datasetRepository.save(dataset);
         return dataset;
     }
+
+    @Transactional
+    public void deleteDataset(int datasetId) {
+        datasetRepository.deleteById(datasetId);
+    }
 }
