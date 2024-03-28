@@ -1,0 +1,5 @@
+spring:
+  datasource:
+    username: postgres
+    password: pass
+    url: jdbc:postgresql://localhost:5432/cca-test-db
