@@ -4,12 +4,14 @@ import lombok.RequiredArgsConstructor;
 import org.json.JSONObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.dto.DatasetUploadResponseDto;
 import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -25,6 +27,9 @@ public class DatasetService {
     }
 
     public DatasetUploadResponseDto uploadDataset(MultipartFile file) {
+        // create dataset
+        // set created timestamp and size
+
         return DatasetUploadResponseDto.builder()
                 .datasetId(1)
                 .build();
@@ -38,5 +43,15 @@ public class DatasetService {
         json.put("datasetId", datasetId);
         json.put("pageable", pageable);
         return json;
+    }
+
+    @Transactional
+    public Dataset renameDataset(int datasetId, String newName) {
+        Dataset dataset = datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new IllegalArgumentException("Wrong name"));
+        dataset.setName(newName);
+        dataset.setLastUpdated(LocalDateTime.now());
+        datasetRepository.save(dataset);
+        return dataset;
     }
 }

@@ -7,7 +7,9 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
+import ru.turbogoose.cca.backend.dto.DatasetRenameReqDto;
 import ru.turbogoose.cca.backend.dto.DatasetUploadResponseDto;
+import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.service.DatasetService;
 
 @RequiredArgsConstructor
@@ -30,5 +32,10 @@ public class DatasetController {
     public String getDatasetPage(@PathVariable("id") int datasetId, Pageable pageable) {
         JSONObject json = datasetService.getDatasetPage(datasetId, pageable);
         return json.toString();
+    }
+
+    @PatchMapping(value = "/datasets/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Dataset renameDataset(@PathVariable("id") int datasetId, @RequestParam String newName) {
+        return datasetService.renameDataset(datasetId, newName);
     }
 }
