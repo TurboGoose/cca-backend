@@ -5,6 +5,6 @@ import lombok.Data;
 
 @Data
 @Builder
-public class UploadedDatasetDto {
+public class DatasetUploadResponseDto {
     private Integer datasetId;
 }
