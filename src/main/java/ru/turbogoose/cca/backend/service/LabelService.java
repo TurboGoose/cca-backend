@@ -37,4 +37,13 @@ public class LabelService {
         datasetRepository.save(dataset); // DataIntegrityViolationException on duplicate label name
         return label;
     }
+
+    @Transactional
+    public Label renameLabel(int labelId, String newName) {
+        Label label = labelRepository.findById(labelId)
+                .orElseThrow(() -> new IllegalArgumentException("Label with name{" + newName + "} not found"));
+        label.setName(newName);
+        labelRepository.save(label); // DataIntegrityViolationException on duplicate label name
+        return label;
+    }
 }

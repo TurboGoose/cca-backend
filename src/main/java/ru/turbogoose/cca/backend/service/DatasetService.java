@@ -48,8 +48,8 @@ public class DatasetService {
     @Transactional
     public Dataset renameDataset(int datasetId, String newName) {
         Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalArgumentException("Wrong name"));
-        dataset.setName(newName);
+                .orElseThrow(() -> new IllegalArgumentException("Dataset with name{" + newName + "} not found"));
+        dataset.setName(newName); // DataIntegrityViolationException on duplicate dataset name
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
         return dataset;

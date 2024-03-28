@@ -19,8 +19,13 @@ public class LabelController {
         return labelService.getLabelListForDataset(datasetId);
     }
 
-    @PostMapping(value = "/datasets", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Label addLabelForDataset(@PathVariable int datasetId, @RequestBody LabelCreationRequestDto creationDto) {
         return labelService.addLabelForDataset(datasetId, creationDto);
+    }
+
+    @PatchMapping(value = "/{labelId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Label renameLabel(@PathVariable int labelId, @RequestParam String newName) {
+        return labelService.renameLabel(labelId, newName);
     }
 }
