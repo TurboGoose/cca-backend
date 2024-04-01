@@ -1,9 +1,5 @@
 package ru.turbogoose.cca.backend.service;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.BulkRequest;
-import co.elastic.clients.elasticsearch.core.BulkResponse;
-import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
@@ -18,19 +14,22 @@ import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
 
-import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+
+import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DatasetService {
     private final DatasetRepository datasetRepository;
-    private final ElasticsearchClient esClient;
+    private final ElasticsearchService elasticsearchService;
 
     public DatasetListResponseDto getAllDatasets() {
         List<Dataset> datasets = datasetRepository.findAll();
@@ -40,63 +39,43 @@ public class DatasetService {
     }
 
     public Dataset uploadDataset(MultipartFile file) {
-        if (file.getOriginalFilename() == null || !file.getOriginalFilename().endsWith(".csv")) {
-            throw new IllegalArgumentException("Dataset must be provided in .csv format");
-        }
-
-        String datasetName = extractFilenameWithoutExtension(file.getOriginalFilename());
-
+        validateDatasetFileExtension(file.getOriginalFilename());
+        String datasetName = removeExtension(file.getOriginalFilename());
         Dataset dataset = Dataset.builder()
                     .name(datasetName)
                     .size(file.getSize())
                     .created(LocalDateTime.now())
                     .build();
-        datasetRepository.save(dataset); // integrity violation on duplicate
+        try {
+            List<Map<String, String>> datasetRecords = readDatasetFromCsv(file.getInputStream());
+            elasticsearchService.indexDataset(dataset, datasetRecords);
+            datasetRepository.save(dataset); // integrity violation on duplicate
+            return dataset;
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
 
-        BulkRequest.Builder br = new BulkRequest.Builder();
+    private void validateDatasetFileExtension(String filename) {
+        if (filename == null || !filename.endsWith(".csv")) {
+            throw new IllegalArgumentException("Dataset must be provided in .csv format");
+        }
+    }
 
-        try (Reader in = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+    private List<Map<String, String>> readDatasetFromCsv(InputStream fileStream) {
+        try (Reader in = new InputStreamReader(fileStream)) {
             CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
                     .setHeader().setSkipHeaderRecord(true)
                     .build();
-
             CSVParser parser = csvFormat.parse(in);
 
-            for (CSVRecord record : parser.getRecords()) {
-                br.operations(op -> op
-                        .index(idx -> idx
-                                .index(datasetName)
-                                .id(datasetName + "_" + record.getRecordNumber())
-                                .document(record.toMap())
-                        )
-                );
-            }
+            return parser.getRecords().stream()
+                    .map(CSVRecord::toMap)
+                    .toList();
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
-
-        try {
-            BulkResponse result = esClient.bulk(br.build());
-            if (result.errors()) {
-                log.error("Bulk had errors");
-                for (BulkResponseItem item : result.items()) {
-                    if (item.error() != null) {
-                        log.error(item.error().reason());
-                    }
-                }
-            }
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
-        }
-
-        return dataset;
     }
-
-    private String extractFilenameWithoutExtension(String filename) {
-        int dotIndex = filename.lastIndexOf(".");
-        return filename.substring(0, dotIndex);
-    }
-
 
     public JSONObject getDatasetPage(int datasetId, Pageable pageable) {
         // retrieve rows according to pageable
