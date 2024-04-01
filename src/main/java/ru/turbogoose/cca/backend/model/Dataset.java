@@ -19,7 +19,9 @@ public class Dataset {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+    @Column(unique = true, nullable = false)
     private String name;
+    private Long size;
     private LocalDateTime created;
     private LocalDateTime lastUpdated;
 
