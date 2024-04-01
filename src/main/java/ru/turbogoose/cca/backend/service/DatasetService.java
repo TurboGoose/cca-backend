@@ -23,6 +23,7 @@ import java.io.Reader;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
 
@@ -104,6 +105,10 @@ public class DatasetService {
 
     @Transactional
     public void deleteDataset(int datasetId) {
-        datasetRepository.deleteById(datasetId);
+        Optional<Dataset> datasetOpt = datasetRepository.findById(datasetId);
+        if (datasetOpt.isPresent()) {
+            datasetRepository.deleteById(datasetId);
+            elasticsearchService.deleteDatasetIndex(datasetOpt.get());
+        }
     }
 }

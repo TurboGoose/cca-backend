@@ -35,13 +35,22 @@ public class ElasticsearchService {
         try {
             BulkResponse result = esClient.bulk(bulkBuilder.build());
             if (result.errors()) {
-                log.error("Bulk had errors");
+                log.error("Bulk had errors"); // TODO: add move verbose logging
                 for (BulkResponseItem item : result.items()) {
                     if (item.error() != null) {
                         log.error(item.error().reason());
                     }
                 }
             }
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    public void deleteDatasetIndex(Dataset dataset) {
+        try {
+            esClient.indices().delete(d -> d
+                    .index(dataset.getName()));
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
