@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
-import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.service.DatasetService;
 
 @RequiredArgsConstructor

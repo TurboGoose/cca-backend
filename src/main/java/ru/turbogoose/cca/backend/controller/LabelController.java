@@ -5,7 +5,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import ru.turbogoose.cca.backend.dto.LabelCreationRequestDto;
 import ru.turbogoose.cca.backend.dto.LabelListResponseDto;
-import ru.turbogoose.cca.backend.model.Label;
+import ru.turbogoose.cca.backend.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.service.LabelService;
 
 @RequiredArgsConstructor
@@ -20,12 +20,12 @@ public class LabelController {
     }
 
     @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Label addLabelForDataset(@PathVariable int datasetId, @RequestBody LabelCreationRequestDto creationDto) {
+    public LabelResponseDto addLabelForDataset(@PathVariable int datasetId, @RequestBody LabelCreationRequestDto creationDto) {
         return labelService.addLabelForDataset(datasetId, creationDto);
     }
 
     @PatchMapping(value = "/{labelId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Label renameLabel(@PathVariable int labelId, @RequestParam String newName) {
+    public LabelResponseDto renameLabel(@PathVariable int labelId, @RequestParam String newName) {
         return labelService.renameLabel(labelId, newName);
     }
 
