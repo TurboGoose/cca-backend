@@ -7,13 +7,12 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
-import ru.turbogoose.cca.backend.dto.DatasetUploadResponseDto;
 import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.service.DatasetService;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/datasets")
+@RequestMapping("/api/datasets")
 public class DatasetController {
     private final DatasetService datasetService;
 
@@ -22,23 +21,23 @@ public class DatasetController {
         return datasetService.getAllDatasets();
     }
 
-    @PostMapping(value = "/datasets", consumes = {"multipart/form-data"}, produces = MediaType.APPLICATION_JSON_VALUE)
-    public DatasetUploadResponseDto uploadDataset(@RequestPart("file")MultipartFile file) {
+    @PostMapping(consumes = {"multipart/form-data"}, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Dataset uploadDataset(@RequestPart("file")MultipartFile file) {
         return datasetService.uploadDataset(file);
     }
 
-    @GetMapping(value = "/datasets/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public String getDatasetPage(@PathVariable int id, Pageable pageable) {
         JSONObject json = datasetService.getDatasetPage(id, pageable);
         return json.toString();
     }
 
-    @PatchMapping(value = "/datasets/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PatchMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Dataset renameDataset(@PathVariable int id, @RequestParam String newName) {
         return datasetService.renameDataset(id, newName);
     }
 
-    @DeleteMapping(value = "/datasets/{id}")
+    @DeleteMapping(value = "/{id}")
     public void deleteDataset(@PathVariable int id) {
         datasetService.deleteDataset(id);
     }
