@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
+import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.service.DatasetService;
 
@@ -22,7 +23,7 @@ public class DatasetController {
     }
 
     @PostMapping(consumes = {"multipart/form-data"}, produces = MediaType.APPLICATION_JSON_VALUE)
-    public Dataset uploadDataset(@RequestPart("file")MultipartFile file) {
+    public DatasetResponseDto uploadDataset(@RequestPart("file")MultipartFile file) {
         return datasetService.uploadDataset(file);
     }
 
@@ -33,7 +34,7 @@ public class DatasetController {
     }
 
     @PatchMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Dataset renameDataset(@PathVariable int id, @RequestParam String newName) {
+    public DatasetResponseDto renameDataset(@PathVariable int id, @RequestParam String newName) {
         return datasetService.renameDataset(id, newName);
     }
 

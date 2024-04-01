@@ -6,11 +6,13 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.json.JSONObject;
+import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
+import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
 
@@ -30,15 +32,18 @@ import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
 public class DatasetService {
     private final DatasetRepository datasetRepository;
     private final ElasticsearchService elasticsearchService;
+    private final ModelMapper mapper;
 
     public DatasetListResponseDto getAllDatasets() {
-        List<Dataset> datasets = datasetRepository.findAll();
+        List<DatasetResponseDto> datasets = datasetRepository.findAll().stream()
+                .map(dataset -> mapper.map(dataset, DatasetResponseDto.class))
+                .toList();
         return DatasetListResponseDto.builder()
                 .datasets(datasets)
                 .build();
     }
 
-    public Dataset uploadDataset(MultipartFile file) {
+    public DatasetResponseDto uploadDataset(MultipartFile file) {
         validateDatasetFileExtension(file.getOriginalFilename());
         String datasetName = removeExtension(file.getOriginalFilename());
         Dataset dataset = Dataset.builder()
@@ -50,7 +55,7 @@ public class DatasetService {
             List<Map<String, String>> datasetRecords = readDatasetFromCsv(file.getInputStream());
             elasticsearchService.indexDataset(dataset, datasetRecords);
             datasetRepository.save(dataset); // integrity violation on duplicate
-            return dataset;
+            return mapper.map(dataset, DatasetResponseDto.class);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
@@ -88,13 +93,13 @@ public class DatasetService {
     }
 
     @Transactional
-    public Dataset renameDataset(int datasetId, String newName) {
+    public DatasetResponseDto renameDataset(int datasetId, String newName) {
         Dataset dataset = datasetRepository.findById(datasetId)
                 .orElseThrow(() -> new IllegalArgumentException("Dataset with name{" + newName + "} not found"));
         dataset.setName(newName); // DataIntegrityViolationException on duplicate dataset name
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
-        return dataset;
+        return mapper.map(dataset, DatasetResponseDto.class);
     }
 
     @Transactional

@@ -9,5 +9,5 @@ import java.util.List;
 @Data
 @Builder
 public class DatasetListResponseDto {
-    private List<Dataset> datasets;
+    private List<DatasetResponseDto> datasets;
 }
