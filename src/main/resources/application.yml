@@ -3,3 +3,10 @@ spring:
     username: postgres
     password: pass
     url: jdbc:postgresql://localhost:5432/cca-test-db
+
+elasticsearch:
+  host: localhost
+  port: 9200
+  fingerprint: 4dabefc19dd59d280e7a82c90f07096eb48be07155592ed69547ec83668080d3
+  username: elastic
+  password: IHj9KXvh12Y56VwmObR5
