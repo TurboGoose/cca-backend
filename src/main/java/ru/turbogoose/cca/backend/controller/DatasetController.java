@@ -1,7 +1,6 @@
 package ru.turbogoose.cca.backend.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.json.JSONObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -28,8 +27,7 @@ public class DatasetController {
 
     @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public String getDatasetPage(@PathVariable int id, Pageable pageable) {
-        JSONObject json = datasetService.getDatasetPage(id, pageable);
-        return json.toString();
+        return datasetService.getDatasetPage(id, pageable);
     }
 
     @PatchMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

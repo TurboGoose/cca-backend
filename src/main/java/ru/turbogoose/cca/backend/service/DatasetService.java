@@ -1,11 +1,14 @@
 package ru.turbogoose.cca.backend.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.json.JSONObject;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,7 @@ public class DatasetService {
     private final DatasetRepository datasetRepository;
     private final ElasticsearchService elasticsearchService;
     private final ModelMapper mapper;
+    private final ObjectMapper objectMapper;
 
     public DatasetListResponseDto getAllDatasets() {
         List<DatasetResponseDto> datasets = datasetRepository.findAll().stream()
@@ -54,7 +58,7 @@ public class DatasetService {
                     .build();
         try {
             List<Map<String, String>> datasetRecords = readDatasetFromCsv(file.getInputStream());
-            elasticsearchService.indexDataset(dataset, datasetRecords);
+            elasticsearchService.createIndex(dataset.getName(), datasetRecords);
             datasetRepository.save(dataset); // integrity violation on duplicate
             return mapper.map(dataset, DatasetResponseDto.class);
         } catch (IOException exc) {
@@ -83,20 +87,28 @@ public class DatasetService {
         }
     }
 
-    public JSONObject getDatasetPage(int datasetId, Pageable pageable) {
-        // retrieve rows according to pageable
-        // include page number
+    public String getDatasetPage(int datasetId, Pageable pageable) {
+        Dataset dataset = datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
 
-        JSONObject json = new JSONObject();
-        json.put("datasetId", datasetId);
-        json.put("pageable", pageable);
-        return json;
+        List<JsonNode> rows = elasticsearchService.getDocuments(dataset.getName(), pageable);
+        return constructJsonPageResponse(rows);
+    }
+
+    private String constructJsonPageResponse(List<JsonNode> rows) {
+        ArrayNode arrayNode = objectMapper.createArrayNode();
+        for (JsonNode node : rows) {
+            arrayNode.add(node);
+        }
+        ObjectNode resultNode = objectMapper.createObjectNode();
+        resultNode.set("rows", arrayNode);
+        return resultNode.toString();
     }
 
     @Transactional
     public DatasetResponseDto renameDataset(int datasetId, String newName) {
         Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalArgumentException("Dataset with name{" + newName + "} not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
         dataset.setName(newName); // DataIntegrityViolationException on duplicate dataset name
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
@@ -108,7 +120,7 @@ public class DatasetService {
         Optional<Dataset> datasetOpt = datasetRepository.findById(datasetId);
         if (datasetOpt.isPresent()) {
             datasetRepository.deleteById(datasetId);
-            elasticsearchService.deleteDatasetIndex(datasetOpt.get());
+            elasticsearchService.deleteIndex(datasetOpt.get().getName());
         }
     }
 }
