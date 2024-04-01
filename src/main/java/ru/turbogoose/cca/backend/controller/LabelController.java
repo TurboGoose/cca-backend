@@ -3,7 +3,6 @@ package ru.turbogoose.cca.backend.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import ru.turbogoose.cca.backend.dto.LabelCreationRequestDto;
 import ru.turbogoose.cca.backend.dto.LabelListResponseDto;
 import ru.turbogoose.cca.backend.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.service.LabelService;
@@ -20,8 +19,8 @@ public class LabelController {
     }
 
     @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public LabelResponseDto addLabelForDataset(@PathVariable int datasetId, @RequestBody LabelCreationRequestDto creationDto) {
-        return labelService.addLabelForDataset(datasetId, creationDto);
+    public LabelResponseDto addLabelForDataset(@PathVariable int datasetId, @RequestParam String labelName) {
+        return labelService.addLabelForDataset(datasetId, labelName);
     }
 
     @PatchMapping(value = "/{labelId}", produces = MediaType.APPLICATION_JSON_VALUE)

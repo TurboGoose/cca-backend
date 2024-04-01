@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.turbogoose.cca.backend.dto.LabelCreationRequestDto;
 import ru.turbogoose.cca.backend.dto.LabelListResponseDto;
 import ru.turbogoose.cca.backend.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.model.Dataset;
@@ -31,11 +30,11 @@ public class LabelService {
     }
 
     @Transactional
-    public LabelResponseDto addLabelForDataset(int datasetId, LabelCreationRequestDto requestDto) {
+    public LabelResponseDto addLabelForDataset(int datasetId, String labelName) {
         Dataset dataset = datasetRepository.findById(datasetId)
                 .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
         Label label = Label.builder()
-                .name(requestDto.getName())
+                .name(labelName)
                 .dataset(dataset)
                 .build();
         dataset.getLabels().add(label);
