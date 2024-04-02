@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Configuration;
 import javax.net.ssl.SSLContext;
 
 @Configuration
-public class ElasticConfig {
+public class ElasticsearchConfig {
     @Value("${elasticsearch.port}")
     private Integer port;
 
