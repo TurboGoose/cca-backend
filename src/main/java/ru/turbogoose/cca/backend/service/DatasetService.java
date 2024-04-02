@@ -24,9 +24,11 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
 
@@ -78,10 +80,10 @@ public class DatasetService {
                     .setHeader().setSkipHeaderRecord(true)
                     .build();
             CSVParser parser = csvFormat.parse(in);
-
-            return parser.getRecords().stream()
+            List<CSVRecord> records = parser.getRecords();
+            return records.stream()
                     .map(CSVRecord::toMap)
-                    .toList();
+                    .collect(Collectors.toCollection(() -> new ArrayList<>(records.size())));
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
@@ -97,9 +99,7 @@ public class DatasetService {
 
     private String constructJsonPageResponse(List<JsonNode> rows) {
         ArrayNode arrayNode = objectMapper.createArrayNode();
-        for (JsonNode node : rows) {
-            arrayNode.add(node);
-        }
+        rows.forEach(arrayNode::add);
         ObjectNode resultNode = objectMapper.createObjectNode();
         resultNode.set("rows", arrayNode);
         return resultNode.toString();
