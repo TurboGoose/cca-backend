@@ -6,6 +6,7 @@ import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ import java.util.Map;
 @Slf4j
 public class ElasticsearchService {
     private final ElasticsearchClient esClient;
+    private final ObjectMapper objectMapper;
 
     public void createIndex(String indexName, List<Map<String, String>> records) {
         BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
@@ -70,8 +72,10 @@ public class ElasticsearchService {
             for (Hit<ObjectNode> hit : response.hits().hits()) {
                 ObjectNode source = hit.source();
                 if (source != null) {
-                    source.put("num", hit.id());
-                    result.add(source);
+                    ObjectNode data = objectMapper.createObjectNode();
+                    data.set("data", source);
+                    data.put("num", hit.id());
+                    result.add(data);
                 }
             }
             return result;
