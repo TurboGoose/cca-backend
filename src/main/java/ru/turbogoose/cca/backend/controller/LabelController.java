@@ -9,7 +9,7 @@ import ru.turbogoose.cca.backend.service.LabelService;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/datasets/{datasetId}/labels")
+@RequestMapping("/api/datasets/{datasetId}/labels")
 public class LabelController {
     private final LabelService labelService;
 
@@ -31,6 +31,5 @@ public class LabelController {
     @DeleteMapping(value = "/{labelId}")
     public void deleteLabel(@PathVariable int labelId) {
         labelService.deleteLabel(labelId);
-        // TODO: delete annotatations cascase
     }
 }
