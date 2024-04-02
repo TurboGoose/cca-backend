@@ -16,9 +16,9 @@ import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.dto.LabelResponseDto;
+import ru.turbogoose.cca.backend.model.Annotation;
 import ru.turbogoose.cca.backend.model.Dataset;
-import ru.turbogoose.cca.backend.model.Label;
-import ru.turbogoose.cca.backend.repository.AnnotationDao;
+import ru.turbogoose.cca.backend.repository.AnnotationRepository;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
 
 import java.io.IOException;
@@ -39,7 +39,7 @@ import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
 @RequiredArgsConstructor
 public class DatasetService {
     private final DatasetRepository datasetRepository;
-    private final AnnotationDao annotationDao;
+    private final AnnotationRepository annotationRepository;
     private final ElasticsearchService elasticsearchService;
     private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
@@ -100,16 +100,24 @@ public class DatasetService {
                 .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
 
         List<ObjectNode> rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
-        Map<Long, List<Label>> annotations = annotationDao.getAnnotationsForPage(datasetId, pageable);
+        Map<Long, List<Annotation>> annotations = getAnnotationsForPage(datasetId, pageable);
         enrichRowsWithAnnotations(rows, annotations);
         return constructJsonPageResponse(rows);
     }
 
-    private void enrichRowsWithAnnotations(List<ObjectNode> rows, Map<Long, List<Label>> annotations) {
+    private Map<Long, List<Annotation>> getAnnotationsForPage(int datasetId, Pageable pageable) {
+        long from = pageable.getOffset();
+        long to = from + pageable.getPageSize();
+        List<Annotation> annotations = annotationRepository.findAnnotationsByDatasetIdAndRowNumBetween(datasetId, from, to);
+        return annotations.stream()
+                .collect(Collectors.groupingBy(a -> a.getId().getRowNum()));
+    }
+
+    private void enrichRowsWithAnnotations(List<ObjectNode> rows, Map<Long, List<Annotation>> annotations) {
         for (ObjectNode row : rows) {
             long rowNum = row.get("num").asLong();
             List<LabelResponseDto> labelsForRow = annotations.getOrDefault(rowNum, List.of()).stream()
-                    .map(l -> mapper.map(l, LabelResponseDto.class))
+                    .map(a -> mapper.map(a.getLabel(), LabelResponseDto.class))
                     .toList();
             row.set("labels", objectMapper.valueToTree(labelsForRow));
         }
