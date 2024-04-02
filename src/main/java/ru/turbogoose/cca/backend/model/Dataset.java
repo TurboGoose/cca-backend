@@ -19,7 +19,7 @@ public class Dataset {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String name;
     @Column(nullable = false)
     private Long size;
