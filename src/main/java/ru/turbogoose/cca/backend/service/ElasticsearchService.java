@@ -6,13 +6,14 @@ import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +32,7 @@ public class ElasticsearchService {
             bulkBuilder.operations(op -> op
                     .index(idx -> idx
                             .index(indexName)
-                            .id(indexName + "_" + recordNum)
+                            .id(recordNum + "")
                             .document(record)));
         }
 
@@ -50,23 +51,30 @@ public class ElasticsearchService {
         }
     }
 
-    public List<JsonNode> getDocuments(String indexName, Pageable pageable) {
+    public List<ObjectNode> getDocuments(String indexName, Pageable pageable) {
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
-            SearchResponse<JsonNode> response = esClient.search(g -> g
+            SearchResponse<ObjectNode> response = esClient.search(g -> g
                             .index(indexName)
                             .from(from)
                             .size(size)
                             .query(q -> q
                                     .matchAll(m -> m)
                             ),
-                    JsonNode.class
+                    ObjectNode.class
             );
             log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
-            return response.hits().hits().stream()
-                    .map(Hit::source)
-                    .toList();
+
+            List<ObjectNode> result = new LinkedList<>();
+            for (Hit<ObjectNode> hit : response.hits().hits()) {
+                ObjectNode source = hit.source();
+                if (source != null) {
+                    source.put("num", hit.id());
+                    result.add(source);
+                }
+            }
+            return result;
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }

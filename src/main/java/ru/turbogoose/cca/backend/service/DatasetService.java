@@ -1,6 +1,5 @@
 package ru.turbogoose.cca.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -16,7 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
+import ru.turbogoose.cca.backend.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.model.Dataset;
+import ru.turbogoose.cca.backend.model.Label;
+import ru.turbogoose.cca.backend.repository.AnnotationDao;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
 
 import java.io.IOException;
@@ -37,6 +39,7 @@ import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
 @RequiredArgsConstructor
 public class DatasetService {
     private final DatasetRepository datasetRepository;
+    private final AnnotationDao annotationDao;
     private final ElasticsearchService elasticsearchService;
     private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
@@ -50,18 +53,21 @@ public class DatasetService {
                 .build();
     }
 
+    //    @Transactional // TODO: applicable here???
     public DatasetResponseDto uploadDataset(MultipartFile file) {
         validateDatasetFileExtension(file.getOriginalFilename());
         String datasetName = removeExtension(file.getOriginalFilename());
-        Dataset dataset = Dataset.builder()
-                    .name(datasetName)
-                    .size(file.getSize())
-                    .created(LocalDateTime.now())
-                    .build();
+
         try {
             List<Map<String, String>> datasetRecords = readDatasetFromCsv(file.getInputStream());
-            elasticsearchService.createIndex(dataset.getName(), datasetRecords);
+            Dataset dataset = Dataset.builder()
+                    .name(datasetName)
+                    .size(file.getSize())
+                    .totalRows(datasetRecords.size())
+                    .created(LocalDateTime.now())
+                    .build();
             datasetRepository.save(dataset); // integrity violation on duplicate
+            elasticsearchService.createIndex(dataset.getName(), datasetRecords);
             return mapper.map(dataset, DatasetResponseDto.class);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
@@ -93,11 +99,23 @@ public class DatasetService {
         Dataset dataset = datasetRepository.findById(datasetId)
                 .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
 
-        List<JsonNode> rows = elasticsearchService.getDocuments(dataset.getName(), pageable);
+        List<ObjectNode> rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
+        Map<Long, List<Label>> annotations = annotationDao.getAnnotationsForPage(datasetId, pageable);
+        enrichRowsWithAnnotations(rows, annotations);
         return constructJsonPageResponse(rows);
     }
 
-    private String constructJsonPageResponse(List<JsonNode> rows) {
+    private void enrichRowsWithAnnotations(List<ObjectNode> rows, Map<Long, List<Label>> annotations) {
+        for (ObjectNode row : rows) {
+            long rowNum = row.get("num").asLong();
+            List<LabelResponseDto> labelsForRow = annotations.getOrDefault(rowNum, List.of()).stream()
+                    .map(l -> mapper.map(l, LabelResponseDto.class))
+                    .toList();
+            row.set("labels", objectMapper.valueToTree(labelsForRow));
+        }
+    }
+
+    private String constructJsonPageResponse(List<ObjectNode> rows) {
         ArrayNode arrayNode = objectMapper.createArrayNode();
         rows.forEach(arrayNode::add);
         ObjectNode resultNode = objectMapper.createObjectNode();
