@@ -11,7 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "labels")
+@Table(name = "labels",
+        uniqueConstraints = {@UniqueConstraint(columnNames = {"dataset_id", "name"})})
 public class Label {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
