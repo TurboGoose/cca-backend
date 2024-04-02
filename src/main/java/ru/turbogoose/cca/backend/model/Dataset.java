@@ -21,7 +21,11 @@ public class Dataset {
     private Integer id;
     @Column(unique = true, nullable = false)
     private String name;
+    @Column(nullable = false)
     private Long size;
+    @Column(nullable = false)
+    private Long totalRows;
+    @Column(nullable = false)
     private LocalDateTime created;
     private LocalDateTime lastUpdated;
 
