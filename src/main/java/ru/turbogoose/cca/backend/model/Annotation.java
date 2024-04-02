@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Data
 @Builder
@@ -18,6 +20,7 @@ public class Annotation {
 
     @MapsId("labelId")
     @ManyToOne
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Label label;
 }
 
