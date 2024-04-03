@@ -96,7 +96,7 @@ public class DatasetService {
 
     public String getDatasetPage(int datasetId, Pageable pageable) {
         Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
+                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
 
         ArrayNode rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
         Map<Long, List<Annotation>> annotationsByRowNum = getAnnotationsForPage(datasetId, pageable);
@@ -132,8 +132,8 @@ public class DatasetService {
     @Transactional
     public DatasetResponseDto renameDataset(int datasetId, String newName) {
         Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
-        dataset.setName(newName); // DataIntegrityViolationException on duplicate dataset name
+                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
+        dataset.setName(newName);
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
         return mapper.map(dataset, DatasetResponseDto.class);
@@ -169,7 +169,7 @@ public class DatasetService {
 
     public String search(int datasetId, String query, Pageable pageable) {
         Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
+                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
         ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query, pageable);
         return searchResponse.toString();
     }

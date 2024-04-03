@@ -32,22 +32,22 @@ public class LabelService {
     @Transactional
     public LabelResponseDto addLabelForDataset(int datasetId, String labelName) {
         Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
+                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
         Label label = Label.builder()
                 .name(labelName)
                 .dataset(dataset)
                 .build();
         dataset.getLabels().add(label);
-        datasetRepository.save(dataset); // DataIntegrityViolationException on duplicate label name
+        datasetRepository.save(dataset); // TODO: handle duplicate name?
         return mapper.map(label, LabelResponseDto.class);
     }
 
     @Transactional
     public LabelResponseDto renameLabel(int labelId, String newName) {
         Label label = labelRepository.findById(labelId)
-                .orElseThrow(() -> new IllegalArgumentException("Label with name{" + newName + "} not found"));
+                .orElseThrow(() -> new IllegalStateException("Label with id{" + labelId + "} not found"));
         label.setName(newName);
-        labelRepository.save(label); // DataIntegrityViolationException on duplicate label name
+        labelRepository.save(label); // TODO: handle duplicate name?
         return mapper.map(label, LabelResponseDto.class);
     }
 
