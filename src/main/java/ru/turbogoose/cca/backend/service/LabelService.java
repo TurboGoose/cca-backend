@@ -21,7 +21,7 @@ public class LabelService {
     private final ModelMapper mapper;
 
     public LabelListResponseDto getLabelListForDataset(int datasetId) {
-        List<LabelResponseDto> labels = labelRepository.getLabelsByDatasetId(datasetId).stream()
+        List<LabelResponseDto> labels = labelRepository.findAllByDatasetId(datasetId).stream()
                 .map(label -> mapper.map(label, LabelResponseDto.class))
                 .toList();
         return LabelListResponseDto.builder()
