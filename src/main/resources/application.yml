@@ -14,8 +14,11 @@ spring:
     enabled: false
 
 elasticsearch:
-  host: localhost
-  port: 9200
-  fingerprint: ${ELASTIC_FINGERPRINT}
-  username: ${ELASTIC_USERNAME}
-  password: ${ELASTIC_PASSWORD}
+  datasource:
+    host: localhost
+    port: 9200
+    fingerprint: ${ELASTIC_FINGERPRINT}
+    username: ${ELASTIC_USERNAME}
+    password: ${ELASTIC_PASSWORD}
+  query:
+    timeout: 30s

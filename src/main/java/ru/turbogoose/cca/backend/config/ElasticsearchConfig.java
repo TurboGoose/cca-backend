@@ -18,19 +18,19 @@ import javax.net.ssl.SSLContext;
 
 @Configuration
 public class ElasticsearchConfig {
-    @Value("${elasticsearch.port}")
+    @Value("${elasticsearch.datasource.port}")
     private Integer port;
 
-    @Value("${elasticsearch.host}")
+    @Value("${elasticsearch.datasource.host}")
     private String host;
 
-    @Value("${elasticsearch.fingerprint}")
+    @Value("${elasticsearch.datasource.fingerprint}")
     private String fingerprint;
 
-    @Value("${elasticsearch.username}")
+    @Value("${elasticsearch.datasource.username}")
     private String username;
 
-    @Value("${elasticsearch.password}")
+    @Value("${elasticsearch.datasource.password}")
     private String password;
 
     @Bean
