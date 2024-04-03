@@ -12,6 +12,11 @@ spring:
       ddl-auto: create
   flyway:
     enabled: false
+  servlet:
+    multipart:
+      max-file-size: 1GB
+      max-request-size: 1GB
+
 
 elasticsearch:
   datasource:
