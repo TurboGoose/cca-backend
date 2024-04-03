@@ -1,5 +1,6 @@
 package ru.turbogoose.cca.backend.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -97,9 +98,9 @@ public class DatasetService {
         Dataset dataset = datasetRepository.findById(datasetId)
                 .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
 
-        List<ObjectNode> rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
-        Map<Long, List<Annotation>> annotations = getAnnotationsForPage(datasetId, pageable);
-        enrichRowsWithAnnotations(rows, annotations);
+        ArrayNode rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
+        Map<Long, List<Annotation>> annotationsByRowNum = getAnnotationsForPage(datasetId, pageable);
+        enrichRowsWithAnnotations(rows, annotationsByRowNum);
         return constructJsonPageResponse(rows);
     }
 
@@ -111,21 +112,20 @@ public class DatasetService {
                 .collect(Collectors.groupingBy(a -> a.getId().getRowNum()));
     }
 
-    private void enrichRowsWithAnnotations(List<ObjectNode> rows, Map<Long, List<Annotation>> annotations) {
-        for (ObjectNode row : rows) {
+    private void enrichRowsWithAnnotations(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum) {
+        for (JsonNode node : rows) {
+            ObjectNode row = (ObjectNode) node;
             long rowNum = row.get("num").asLong();
-            List<LabelResponseDto> labelsForRow = annotations.getOrDefault(rowNum, List.of()).stream()
+            List<LabelResponseDto> labelsForRow = annotationsByRowNum.getOrDefault(rowNum, List.of()).stream()
                     .map(a -> mapper.map(a.getLabel(), LabelResponseDto.class))
                     .toList();
             row.set("labels", objectMapper.valueToTree(labelsForRow));
         }
     }
 
-    private String constructJsonPageResponse(List<ObjectNode> rows) {
-        ArrayNode arrayNode = objectMapper.createArrayNode();
-        rows.forEach(arrayNode::add);
+    private String constructJsonPageResponse(ArrayNode rows) {
         ObjectNode resultNode = objectMapper.createObjectNode();
-        resultNode.set("rows", arrayNode);
+        resultNode.set("rows", rows);
         return resultNode.toString();
     }
 
@@ -165,5 +165,12 @@ public class DatasetService {
         }
         annotationRepository.saveAll(annotationsToAdd);
         annotationRepository.deleteAllByIdInBatch(annotationIdsToDelete);
+    }
+
+    public String search(int datasetId, String query) {
+        Dataset dataset = datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
+        ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query);
+        return searchResponse.toString();
     }
 }
