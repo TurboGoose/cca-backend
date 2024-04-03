@@ -74,7 +74,7 @@ public class ElasticsearchService {
                 if (source != null) {
                     ObjectNode data = objectMapper.createObjectNode();
                     data.set("data", source);
-                    data.put("num", hit.id());
+                    data.put("num", Long.valueOf(hit.id()));
                     result.add(data);
                 }
             }
