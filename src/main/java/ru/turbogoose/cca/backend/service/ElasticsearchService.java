@@ -5,11 +5,16 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
+import co.elastic.clients.elasticsearch.core.search.HighlighterEncoder;
+import co.elastic.clients.elasticsearch.core.search.HighlighterType;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.elasticsearch.core.search.TotalHits;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +29,8 @@ import java.util.Map;
 public class ElasticsearchService {
     private final ElasticsearchClient esClient;
     private final ObjectMapper objectMapper;
+    @Value("${elasticsearch.query.timeout:1m}")
+    private String queryTimeout;
 
     public void createIndex(String indexName, List<Map<String, String>> records) {
         BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
@@ -53,6 +60,41 @@ public class ElasticsearchService {
         }
     }
 
+    public ObjectNode search(String indexName, String query) {
+        try {
+            SearchResponse<ObjectNode> response = esClient.search(g -> g
+                            .index(indexName)
+                            .timeout(queryTimeout)
+                            .query(q -> q
+                                    .simpleQueryString(sqs -> sqs
+                                            .query(query)))
+                            .highlight(h -> h
+                                    .encoder(HighlighterEncoder.Html)
+                                    .preTags("<em class=\"hlt\">")
+                                    .type(HighlighterType.Plain)
+                                    .fields(
+                                            "*", hf -> hf)),
+                    ObjectNode.class
+            );
+            return extractHitsAndCollectToJson(response);
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+
+    private ObjectNode extractHitsAndCollectToJson(SearchResponse<ObjectNode> response) {
+        ObjectNode resultNode = objectMapper.createObjectNode();
+        resultNode.put("timeout", response.timedOut());
+        TotalHits total = response.hits().total();
+        if (total != null) {
+            resultNode.put("total", total.value());
+        }
+        resultNode.set("results", objectMapper.valueToTree(extractHitsAndConvertToJson(response)));
+        return resultNode;
+    }
+
+
     public List<ObjectNode> getDocuments(String indexName, Pageable pageable) {
         try {
             int from = (int) pageable.getOffset();
@@ -62,28 +104,29 @@ public class ElasticsearchService {
                             .from(from)
                             .size(size)
                             .query(q -> q
-                                    .matchAll(m -> m)
-                            ),
+                                    .matchAll(m -> m)),
                     ObjectNode.class
             );
             log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
-
-            List<ObjectNode> result = new LinkedList<>();
-            for (Hit<ObjectNode> hit : response.hits().hits()) {
-                ObjectNode source = hit.source();
-                if (source != null) {
-                    ObjectNode data = objectMapper.createObjectNode();
-                    data.set("data", source);
-                    data.put("num", Long.valueOf(hit.id()));
-                    result.add(data);
-                }
-            }
-            return result;
+            return extractHitsAndConvertToJson(response);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
+    private List<ObjectNode> extractHitsAndConvertToJson(SearchResponse<ObjectNode> response) {
+        List<ObjectNode> result = new LinkedList<>();
+        for (Hit<ObjectNode> hit : response.hits().hits()) {
+            ObjectNode source = hit.source();
+            if (source != null) {
+                ObjectNode data = objectMapper.createObjectNode();
+                data.set("data", source);
+                data.put("num", Long.valueOf(hit.id()));
+                result.add(data);
+            }
+        }
+        return result;
+    }
 
     public void deleteIndex(String indexName) {
         try {
