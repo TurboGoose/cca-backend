@@ -9,8 +9,8 @@ import co.elastic.clients.elasticsearch.core.search.HighlighterEncoder;
 import co.elastic.clients.elasticsearch.core.search.HighlighterType;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.TotalHits;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +19,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -76,26 +75,26 @@ public class ElasticsearchService {
                                             "*", hf -> hf)),
                     ObjectNode.class
             );
-            return extractHitsAndCollectToJson(response);
+            return extractHitsWithStatsAndConvertToJson(response);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
 
-    private ObjectNode extractHitsAndCollectToJson(SearchResponse<ObjectNode> response) {
+    private ObjectNode extractHitsWithStatsAndConvertToJson(SearchResponse<ObjectNode> response) {
         ObjectNode resultNode = objectMapper.createObjectNode();
         resultNode.put("timeout", response.timedOut());
         TotalHits total = response.hits().total();
         if (total != null) {
             resultNode.put("total", total.value());
         }
-        resultNode.set("results", objectMapper.valueToTree(extractHitsAndConvertToJson(response)));
+        resultNode.set("results", extractHitsAndConvertToJson(response));
         return resultNode;
     }
 
 
-    public List<ObjectNode> getDocuments(String indexName, Pageable pageable) {
+    public ArrayNode getDocuments(String indexName, Pageable pageable) {
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
@@ -114,18 +113,18 @@ public class ElasticsearchService {
         }
     }
 
-    private List<ObjectNode> extractHitsAndConvertToJson(SearchResponse<ObjectNode> response) {
-        List<ObjectNode> result = new LinkedList<>();
+    private ArrayNode extractHitsAndConvertToJson(SearchResponse<ObjectNode> response) {
+        ArrayNode resultArray = objectMapper.createArrayNode();
         for (Hit<ObjectNode> hit : response.hits().hits()) {
             ObjectNode source = hit.source();
             if (source != null) {
                 ObjectNode data = objectMapper.createObjectNode();
                 data.set("data", source);
                 data.put("num", Long.valueOf(hit.id()));
-                result.add(data);
+                resultArray.add(data);
             }
         }
-        return result;
+        return resultArray;
     }
 
     public void deleteIndex(String indexName) {
