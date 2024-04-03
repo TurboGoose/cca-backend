@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import ru.turbogoose.cca.backend.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.service.DatasetService;
@@ -21,7 +22,7 @@ public class DatasetController {
     }
 
     @PostMapping(consumes = {"multipart/form-data"}, produces = MediaType.APPLICATION_JSON_VALUE)
-    public DatasetResponseDto uploadDataset(@RequestPart("file")MultipartFile file) {
+    public DatasetResponseDto uploadDataset(@RequestPart("file") MultipartFile file) {
         return datasetService.uploadDataset(file);
     }
 
@@ -35,8 +36,13 @@ public class DatasetController {
         return datasetService.renameDataset(id, newName);
     }
 
-    @DeleteMapping(value = "/{id}")
+    @DeleteMapping( "/{id}")
     public void deleteDataset(@PathVariable int id) {
         datasetService.deleteDataset(id);
+    }
+
+    @PutMapping( "/{id}")
+    public void annotate(@RequestBody AnnotateRequestDto annotateDto) {
+        datasetService.annotate(annotateDto);
     }
 }

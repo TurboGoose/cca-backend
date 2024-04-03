@@ -13,23 +13,20 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
-import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
-import ru.turbogoose.cca.backend.dto.LabelResponseDto;
+import ru.turbogoose.cca.backend.dto.*;
 import ru.turbogoose.cca.backend.model.Annotation;
+import ru.turbogoose.cca.backend.model.AnnotationId;
 import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.repository.AnnotationRepository;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
+import ru.turbogoose.cca.backend.repository.LabelRepository;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
@@ -40,6 +37,7 @@ import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
 public class DatasetService {
     private final DatasetRepository datasetRepository;
     private final AnnotationRepository annotationRepository;
+    private final LabelRepository labelRepository;
     private final ElasticsearchService elasticsearchService;
     private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
@@ -148,5 +146,24 @@ public class DatasetService {
             datasetRepository.deleteById(datasetId);
             elasticsearchService.deleteIndex(datasetOpt.get().getName());
         }
+    }
+
+    @Transactional
+    public void annotate(AnnotateRequestDto annotateDto) {
+        List<Annotation> annotationsToAdd = new LinkedList<>();
+        List<AnnotationId> annotationIdsToDelete = new LinkedList<>();
+        for (AnnotationDto annotation : annotateDto.getAnnotations()) {
+            AnnotationId annotationId = mapper.map(annotation, AnnotationId.class);
+            if (annotation.getAdded()) {
+                annotationsToAdd.add(Annotation.builder()
+                        .id(annotationId)
+                        .label(labelRepository.getReferenceById(annotationId.getLabelId()))
+                        .build());
+            } else {
+                annotationIdsToDelete.add(annotationId);
+            }
+        }
+        annotationRepository.saveAll(annotationsToAdd);
+        annotationRepository.deleteAllByIdInBatch(annotationIdsToDelete);
     }
 }
