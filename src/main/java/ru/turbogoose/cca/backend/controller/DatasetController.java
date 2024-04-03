@@ -45,4 +45,9 @@ public class DatasetController {
     public void annotate(@RequestBody AnnotateRequestDto annotateDto) {
         datasetService.annotate(annotateDto);
     }
+
+    @GetMapping(value = "/{id}/search", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String search(@PathVariable int id, @RequestParam String query) {
+        return datasetService.search(id, query);
+    }
 }
