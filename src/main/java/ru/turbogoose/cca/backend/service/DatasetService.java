@@ -30,7 +30,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static ru.turbogoose.cca.backend.util.CommonUtil.removeExtension;
+import static ru.turbogoose.cca.backend.util.Commons.removeExtension;
 
 @Service
 @Slf4j
