@@ -59,37 +59,65 @@ public class ElasticsearchService {
         }
     }
 
-    public ObjectNode search(String indexName, String query) {
+    public ObjectNode search(String indexName, String query, Pageable pageable) {
         try {
+            int from = (int) pageable.getOffset();
+            int size = pageable.getPageSize();
             SearchResponse<ObjectNode> response = esClient.search(g -> g
                             .index(indexName)
+                            .from(from)
+                            .size(size)
                             .timeout(queryTimeout)
                             .query(q -> q
                                     .simpleQueryString(sqs -> sqs
                                             .query(query)))
                             .highlight(h -> h
                                     .encoder(HighlighterEncoder.Html)
+                                    .numberOfFragments(0)
                                     .preTags("<em class=\"hlt\">")
+                                    .postTags("</em>")
                                     .type(HighlighterType.Plain)
                                     .fields(
                                             "*", hf -> hf)),
                     ObjectNode.class
             );
-            return extractHitsWithStatsAndConvertToJson(response);
+            return extractHitsWithHighlightsAndConvertToJson(response);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
 
-    private ObjectNode extractHitsWithStatsAndConvertToJson(SearchResponse<ObjectNode> response) {
+    private ObjectNode extractHitsWithHighlightsAndConvertToJson(SearchResponse<ObjectNode> response) {
         ObjectNode resultNode = objectMapper.createObjectNode();
         resultNode.put("timeout", response.timedOut());
         TotalHits total = response.hits().total();
         if (total != null) {
             resultNode.put("total", total.value());
         }
-        resultNode.set("results", extractHitsAndConvertToJson(response));
+
+        ArrayNode resultArray = objectMapper.createArrayNode();
+        for (Hit<ObjectNode> hit : response.hits().hits()) {
+            ObjectNode source = hit.source();
+            if (source != null) {
+                ObjectNode dataNode = objectMapper.createObjectNode();
+                dataNode.put("num", Long.valueOf(hit.id()));
+                dataNode.set("source", source);
+
+                ObjectNode highlightsNode = objectMapper.createObjectNode();
+                for (String fieldName : hit.highlight().keySet()) {
+                    List<String> highlights = hit.highlight().get(fieldName);
+                    if (!highlights.isEmpty()) {
+                        highlightsNode.put(fieldName, highlights.getFirst());
+                    }
+                }
+                dataNode.set("highlights", highlightsNode);
+
+                resultArray.add(dataNode);
+            }
+        }
+
+        resultNode.set("results", resultArray);
         return resultNode;
     }
 
@@ -119,7 +147,7 @@ public class ElasticsearchService {
             ObjectNode source = hit.source();
             if (source != null) {
                 ObjectNode data = objectMapper.createObjectNode();
-                data.set("data", source);
+                data.set("source", source);
                 data.put("num", Long.valueOf(hit.id()));
                 resultArray.add(data);
             }

@@ -167,10 +167,10 @@ public class DatasetService {
         annotationRepository.deleteAllByIdInBatch(annotationIdsToDelete);
     }
 
-    public String search(int datasetId, String query) {
+    public String search(int datasetId, String query, Pageable pageable) {
         Dataset dataset = datasetRepository.findById(datasetId)
                 .orElseThrow(() -> new IllegalArgumentException("Dataset with id{" + datasetId + "} not found"));
-        ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query);
+        ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query, pageable);
         return searchResponse.toString();
     }
 }

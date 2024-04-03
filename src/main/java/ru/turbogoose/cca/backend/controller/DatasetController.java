@@ -47,7 +47,7 @@ public class DatasetController {
     }
 
     @GetMapping(value = "/{id}/search", produces = MediaType.APPLICATION_JSON_VALUE)
-    public String search(@PathVariable int id, @RequestParam String query) {
-        return datasetService.search(id, query);
+    public String search(@PathVariable int id, @RequestParam String query, Pageable pageable) {
+        return datasetService.search(id, query, pageable);
     }
 }
