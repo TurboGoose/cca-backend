@@ -19,7 +19,7 @@ public class Annotation {
     private AnnotationId id;
 
     @MapsId("labelId")
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Label label;
 }
