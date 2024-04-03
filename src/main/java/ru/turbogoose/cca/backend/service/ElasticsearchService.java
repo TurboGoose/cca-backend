@@ -102,22 +102,20 @@ public class ElasticsearchService {
             if (source != null) {
                 ObjectNode dataNode = objectMapper.createObjectNode();
                 dataNode.put("num", Long.valueOf(hit.id()));
-                dataNode.set("source", source);
 
-                ObjectNode highlightsNode = objectMapper.createObjectNode();
                 for (String fieldName : hit.highlight().keySet()) {
                     List<String> highlights = hit.highlight().get(fieldName);
-                    if (!highlights.isEmpty()) {
-                        highlightsNode.put(fieldName, highlights.getFirst());
+                    if (!highlights.isEmpty() && source.has(fieldName)) {
+                        source.put(fieldName, highlights.getFirst());
                     }
                 }
-                dataNode.set("highlights", highlightsNode);
+                dataNode.set("source", source);
 
                 resultArray.add(dataNode);
             }
         }
 
-        resultNode.set("results", resultArray);
+        resultNode.set("rows", resultArray);
         return resultNode;
     }
 
