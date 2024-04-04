@@ -13,6 +13,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class FileConversionUtil {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
     public static ArrayNode readCsvDatasetToJson(InputStream inputStream) {
         try (Reader in = new InputStreamReader(inputStream)) {
             CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
@@ -22,7 +24,6 @@ public class FileConversionUtil {
             CSVParser parser = csvFormat.parse(in);
             List<CSVRecord> records = parser.getRecords();
 
-            ObjectMapper objectMapper = new ObjectMapper();
             ArrayNode jsonRecords = objectMapper.createArrayNode();
             for (CSVRecord record : records) {
                 jsonRecords.add(objectMapper.valueToTree(record.toMap()));
@@ -37,13 +38,11 @@ public class FileConversionUtil {
         if (array.isEmpty()) {
             return;
         }
-
         List<String> headers = new LinkedList<>();
         array.get(0).fieldNames().forEachRemaining(headers::add);
         CSVFormat format = CSVFormat.DEFAULT.builder()
                 .setHeader(headers.toArray(String[]::new))
                 .build();
-
         try (CSVPrinter csvPrinter = new CSVPrinter(new OutputStreamWriter(outputStream), format)) {
             for (JsonNode node : array) { // TODO: optimize using piping?
                 csvPrinter.printRecord(headers.stream().map(h -> node.get(h).asText()));
@@ -58,7 +57,7 @@ public class FileConversionUtil {
             return;
         }
         try {
-            new ObjectMapper().writeValue(outputStream, array);
+            objectMapper.writeValue(outputStream, array);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
