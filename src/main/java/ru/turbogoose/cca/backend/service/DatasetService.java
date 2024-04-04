@@ -83,18 +83,28 @@ public class DatasetService {
                 .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
 
         ArrayNode rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
-        Map<Long, List<Annotation>> annotationsByRowNum = getAnnotationsForPage(datasetId, pageable);
+        Map<Long, List<Annotation>> annotationsByRowNum = getAnnotations(datasetId, pageable);
         enrichRowsWithAnnotations(rows, annotationsByRowNum);
-        return constructJsonPageResponse(rows);
+        return composeJsonPageResponse(rows);
     }
 
-    private Map<Long, List<Annotation>> getAnnotationsForPage(int datasetId, Pageable pageable) {
-        long from = pageable.getOffset();
-        long to = from + pageable.getPageSize();
-        List<Annotation> annotations = annotationRepository.findAnnotationsByDatasetIdAndRowNumBetween(datasetId, from, to);
+    private Map<Long, List<Annotation>> getAnnotations(int datasetId) {
+        return getAnnotations(datasetId, null);
+    }
+
+    private Map<Long, List<Annotation>> getAnnotations(int datasetId, Pageable pageable) {
+        List<Annotation> annotations;
+        if (pageable == null) {
+            annotations = annotationRepository.findAllAnnotationsByDatasetId(datasetId);
+        } else {
+            long from = pageable.getOffset();
+            long to = from + pageable.getPageSize();
+            annotations = annotationRepository.findAnnotationsByDatasetIdAndRowNumBetween(datasetId, from, to);
+        }
         return annotations.stream()
                 .collect(Collectors.groupingBy(a -> a.getId().getRowNum()));
     }
+
 
     private void enrichRowsWithAnnotations(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum) {
         for (JsonNode node : rows) {
@@ -107,7 +117,7 @@ public class DatasetService {
         }
     }
 
-    private String constructJsonPageResponse(ArrayNode rows) {
+    private String composeJsonPageResponse(ArrayNode rows) {
         ObjectNode resultNode = objectMapper.createObjectNode();
         resultNode.set("rows", rows);
         return resultNode.toString();
@@ -161,8 +171,23 @@ public class DatasetService {
     public String downloadDataset(int datasetId, OutputStream outputStream) {
         Dataset dataset = datasetRepository.findById(datasetId)
                 .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
-        ArrayNode allDocuments = elasticsearchService.getAllDocuments(dataset.getName());
-        Commons.writeJsonAsCsv(allDocuments, outputStream);
+
+        ArrayNode allRows = elasticsearchService.getAllDocuments(dataset.getName());
+        Map<Long, List<Annotation>> annotations = getAnnotations(datasetId);
+        enrichRowsWithAnnotationNames(allRows, annotations);
+
+        Commons.writeJsonAsCsv(allRows, outputStream);
         return dataset.getName();
+    }
+
+    private void enrichRowsWithAnnotationNames(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum) {
+        long count = 0;
+        for (JsonNode node : rows) {
+            ObjectNode row = (ObjectNode) node;
+            String labelsForRow = annotationsByRowNum.getOrDefault(++count, List.of()).stream()
+                    .map(a -> a.getLabel().getName())
+                    .collect(Collectors.joining(";"));
+            row.put("labels", labelsForRow);
+        }
     }
 }

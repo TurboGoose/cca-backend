@@ -13,4 +13,7 @@ public interface AnnotationRepository extends JpaRepository<Annotation, Annotati
     List<Annotation> findAnnotationsByDatasetIdAndRowNumBetween(@Param("datasetId") int datasetId,
                                                                 @Param("from") long from,
                                                                 @Param("to") long to);
+
+    @Query("select a from Annotation a where a.label.dataset.id = :datasetId")
+    List<Annotation> findAllAnnotationsByDatasetId(@Param("datasetId") int datasetId);
 }
