@@ -6,9 +6,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVParser;
-import org.apache.commons.csv.CSVRecord;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -24,8 +21,6 @@ import ru.turbogoose.cca.backend.repository.LabelRepository;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -58,7 +53,7 @@ public class DatasetService {
         String datasetName = removeExtension(file.getOriginalFilename());
 
         try {
-            List<Map<String, String>> datasetRecords = readDatasetFromCsv(file.getInputStream());
+            ArrayNode datasetRecords = Commons.readDatasetToJson(file.getInputStream());
             Dataset dataset = Dataset.builder()
                     .name(datasetName)
                     .size(file.getSize())
@@ -76,21 +71,6 @@ public class DatasetService {
     private void validateDatasetFileExtension(String filename) {
         if (filename == null || !filename.endsWith(".csv")) {
             throw new IllegalArgumentException("Dataset must be provided in .csv format");
-        }
-    }
-
-    private List<Map<String, String>> readDatasetFromCsv(InputStream fileStream) {
-        try (Reader in = new InputStreamReader(fileStream)) {
-            CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
-                    .setHeader().setSkipHeaderRecord(true)
-                    .build();
-            CSVParser parser = csvFormat.parse(in);
-            List<CSVRecord> records = parser.getRecords();
-            return records.stream()
-                    .map(CSVRecord::toMap)
-                    .collect(Collectors.toCollection(() -> new ArrayList<>(records.size())));
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
         }
     }
 

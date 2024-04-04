@@ -1,6 +1,8 @@
 package ru.turbogoose.cca.backend.service;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.FieldSort;
+import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -9,6 +11,7 @@ import co.elastic.clients.elasticsearch.core.search.HighlighterEncoder;
 import co.elastic.clients.elasticsearch.core.search.HighlighterType;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.TotalHits;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,31 +22,35 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ElasticsearchService {
-    private final ElasticsearchClient esClient;
-    private final ObjectMapper objectMapper;
+    private static final String TIE_BREAKER_ID = "tie_breaker_id";
     @Value("${elasticsearch.query.timeout:1m}")
     private String queryTimeout;
 
-    public void createIndex(String indexName, List<Map<String, String>> records) {
+    private final ElasticsearchClient esClient;
+    private final ObjectMapper objectMapper;
+
+    public void createIndex(String indexName, ArrayNode records) {
         BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
 
         int counter = 0;
         for (Map<String, String> record : records) {
             int recordNum = counter++;
+        for (JsonNode node : records) {
+            int recordNum = ++counter;
+            ObjectNode record = (ObjectNode) node;
             bulkBuilder.operations(op -> op
                     .index(idx -> idx
                             .index(indexName)
                             .id(recordNum + "")
                             .document(record)));
         }
-
         try {
             BulkResponse result = esClient.bulk(bulkBuilder.build());
             if (result.errors()) {
