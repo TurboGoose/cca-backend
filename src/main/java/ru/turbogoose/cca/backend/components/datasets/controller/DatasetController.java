@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
+import ru.turbogoose.cca.backend.components.annotations.service.AnnotationService;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.model.Dataset;
@@ -20,6 +21,7 @@ import java.io.IOException;
 @RequestMapping("/api/datasets")
 public class DatasetController {
     private final DatasetService datasetService;
+    private final AnnotationService annotationService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public DatasetListResponseDto getAllDatasets() {
@@ -48,7 +50,7 @@ public class DatasetController {
 
     @PutMapping( "/{id}")
     public void annotate(@RequestBody AnnotateRequestDto annotateDto) {
-        datasetService.annotate(annotateDto);
+        annotationService.annotate(annotateDto);
     }
 
     @GetMapping(value = "/{id}/search", produces = MediaType.APPLICATION_JSON_VALUE)

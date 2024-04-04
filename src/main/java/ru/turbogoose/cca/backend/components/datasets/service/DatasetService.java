@@ -11,40 +11,34 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
-import ru.turbogoose.cca.backend.components.annotations.dto.AnnotationDto;
+import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
+import ru.turbogoose.cca.backend.components.annotations.service.AnnotationService;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
-import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
-import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
-import ru.turbogoose.cca.backend.components.annotations.model.AnnotationId;
 import ru.turbogoose.cca.backend.components.datasets.model.Dataset;
 import ru.turbogoose.cca.backend.components.datasets.model.FileExtension;
-import ru.turbogoose.cca.backend.components.annotations.repository.AnnotationRepository;
 import ru.turbogoose.cca.backend.components.datasets.repository.DatasetRepository;
-import ru.turbogoose.cca.backend.components.labels.repository.LabelRepository;
+import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.components.search.ElasticsearchService;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.LocalDateTime;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static ru.turbogoose.cca.backend.components.datasets.util.FileConversionUtil.*;
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
+import static ru.turbogoose.cca.backend.components.datasets.util.FileConversionUtil.*;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DatasetService {
     private final DatasetRepository datasetRepository;
-    private final AnnotationRepository annotationRepository;
-    private final LabelRepository labelRepository;
     private final ElasticsearchService elasticsearchService;
+    private final AnnotationService annotationService;
     private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
 
@@ -92,28 +86,10 @@ public class DatasetService {
         Dataset dataset = getDatasetById(datasetId);
 
         ArrayNode rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
-        Map<Long, List<Annotation>> annotationsByRowNum = getAnnotations(datasetId, pageable);
+        Map<Long, List<Annotation>> annotationsByRowNum = annotationService.getAnnotations(datasetId, pageable);
         enrichRowsWithAnnotations(rows, annotationsByRowNum);
         return composeJsonPageResponse(rows);
     }
-
-    private Map<Long, List<Annotation>> getAnnotations(int datasetId) {
-        return getAnnotations(datasetId, null);
-    }
-
-    private Map<Long, List<Annotation>> getAnnotations(int datasetId, Pageable pageable) {
-        List<Annotation> annotations;
-        if (pageable == null) {
-            annotations = annotationRepository.findAllAnnotationsByDatasetId(datasetId);
-        } else {
-            long from = pageable.getOffset();
-            long to = from + pageable.getPageSize();
-            annotations = annotationRepository.findAnnotationsByDatasetIdAndRowNumBetween(datasetId, from, to);
-        }
-        return annotations.stream()
-                .collect(Collectors.groupingBy(a -> a.getId().getRowNum()));
-    }
-
 
     private void enrichRowsWithAnnotations(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum) {
         for (JsonNode node : rows) {
@@ -150,25 +126,6 @@ public class DatasetService {
         }
     }
 
-    @Transactional
-    public void annotate(AnnotateRequestDto annotateDto) {
-        List<Annotation> annotationsToAdd = new LinkedList<>();
-        List<AnnotationId> annotationIdsToDelete = new LinkedList<>();
-        for (AnnotationDto annotation : annotateDto.getAnnotations()) {
-            AnnotationId annotationId = mapper.map(annotation, AnnotationId.class);
-            if (annotation.getAdded()) {
-                annotationsToAdd.add(Annotation.builder()
-                        .id(annotationId)
-                        .label(labelRepository.getReferenceById(annotationId.getLabelId()))
-                        .build());
-            } else {
-                annotationIdsToDelete.add(annotationId);
-            }
-        }
-        annotationRepository.saveAll(annotationsToAdd);
-        annotationRepository.deleteAllByIdInBatch(annotationIdsToDelete);
-    }
-
     public String search(int datasetId, String query, Pageable pageable) {
         Dataset dataset = getDatasetById(datasetId);
         ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query, pageable);
@@ -177,7 +134,7 @@ public class DatasetService {
 
     public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream outputStream) {
         ArrayNode allRows = elasticsearchService.getAllDocuments(dataset.getName());
-        Map<Long, List<Annotation>> annotations = getAnnotations(dataset.getId());
+        Map<Long, List<Annotation>> annotations = annotationService.getAnnotations(dataset.getId());
         enrichRowsWithAnnotationNames(allRows, annotations, fileExtension);
 
         if (fileExtension == FileExtension.CSV) {
