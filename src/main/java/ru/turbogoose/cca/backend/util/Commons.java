@@ -37,8 +37,8 @@ public class Commons {
         return NOT_FOUND;
     }
 
-    public static ArrayNode readDatasetToJson(InputStream fileStream) {
-        try (Reader in = new InputStreamReader(fileStream)) {
+    public static ArrayNode readCsvDatasetToJson(InputStream inputStream) {
+        try (Reader in = new InputStreamReader(inputStream)) {
             CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
                     .setHeader().setSkipHeaderRecord(true)
                     .setIgnoreEmptyLines(true)
@@ -57,7 +57,7 @@ public class Commons {
         }
     }
 
-    public static void writeJsonAsCsv(ArrayNode array, OutputStream outputStream) {
+    public static void writeJsonDatasetAsCsv(ArrayNode array, OutputStream outputStream) {
         if (array.isEmpty()) {
             return;
         }

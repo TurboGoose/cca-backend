@@ -57,7 +57,7 @@ public class DatasetService {
         String datasetName = removeExtension(file.getOriginalFilename());
 
         try {
-            ArrayNode datasetRecords = Commons.readDatasetToJson(file.getInputStream());
+            ArrayNode datasetRecords = Commons.readCsvDatasetToJson(file.getInputStream());
             Dataset dataset = Dataset.builder()
                     .name(datasetName)
                     .size(file.getSize())
@@ -176,7 +176,7 @@ public class DatasetService {
         Map<Long, List<Annotation>> annotations = getAnnotations(datasetId);
         enrichRowsWithAnnotationNames(allRows, annotations);
 
-        Commons.writeJsonAsCsv(allRows, outputStream);
+        Commons.writeJsonDatasetAsCsv(allRows, outputStream);
         return dataset.getName();
     }
 
