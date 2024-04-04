@@ -19,7 +19,7 @@ import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 import ru.turbogoose.cca.backend.components.annotations.model.AnnotationId;
 import ru.turbogoose.cca.backend.components.datasets.model.Dataset;
-import ru.turbogoose.cca.backend.components.datasets.model.FileType;
+import ru.turbogoose.cca.backend.components.datasets.model.FileExtension;
 import ru.turbogoose.cca.backend.components.annotations.repository.AnnotationRepository;
 import ru.turbogoose.cca.backend.components.datasets.repository.DatasetRepository;
 import ru.turbogoose.cca.backend.components.labels.repository.LabelRepository;
@@ -47,6 +47,11 @@ public class DatasetService {
     private final ElasticsearchService elasticsearchService;
     private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
+
+    public Dataset getDatasetById(int datasetId) {
+        return datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
+    }
 
     public DatasetListResponseDto getAllDatasets() {
         List<DatasetResponseDto> datasets = datasetRepository.findAll().stream()
@@ -84,8 +89,7 @@ public class DatasetService {
     }
 
     public String getDatasetPage(int datasetId, Pageable pageable) {
-        Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
+        Dataset dataset = getDatasetById(datasetId);
 
         ArrayNode rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
         Map<Long, List<Annotation>> annotationsByRowNum = getAnnotations(datasetId, pageable);
@@ -130,8 +134,7 @@ public class DatasetService {
 
     @Transactional
     public DatasetResponseDto renameDataset(int datasetId, String newName) {
-        Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
+        Dataset dataset = getDatasetById(datasetId);
         dataset.setName(newName);
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
@@ -167,38 +170,33 @@ public class DatasetService {
     }
 
     public String search(int datasetId, String query, Pageable pageable) {
-        Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
+        Dataset dataset = getDatasetById(datasetId);
         ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query, pageable);
         return searchResponse.toString();
     }
 
-    public String downloadDataset(int datasetId, FileType fileType, OutputStream outputStream) {
-        Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
-
+    public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream outputStream) {
         ArrayNode allRows = elasticsearchService.getAllDocuments(dataset.getName());
-        Map<Long, List<Annotation>> annotations = getAnnotations(datasetId);
-        enrichRowsWithAnnotationNames(allRows, annotations, fileType);
+        Map<Long, List<Annotation>> annotations = getAnnotations(dataset.getId());
+        enrichRowsWithAnnotationNames(allRows, annotations, fileExtension);
 
-        if (fileType == FileType.CSV) {
+        if (fileExtension == FileExtension.CSV) {
             writeJsonDatasetAsCsv(allRows, outputStream);
-        } else if (fileType == FileType.JSON) {
+        } else if (fileExtension == FileExtension.JSON) {
             writeJsonDataset(allRows, outputStream);
         }
-        return dataset.getName();
     }
 
-    private void enrichRowsWithAnnotationNames(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum, FileType fileType) {
+    private void enrichRowsWithAnnotationNames(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum, FileExtension fileExtension) {
         long rowCount = 1;
         for (JsonNode node : rows) {
             ObjectNode row = (ObjectNode) node;
-            if (fileType == FileType.CSV) {
+            if (fileExtension == FileExtension.CSV) {
                 String labelsForRow = annotationsByRowNum.getOrDefault(rowCount, List.of()).stream()
                         .map(a -> a.getLabel().getName())
                         .collect(Collectors.joining(";"));
                 row.put("labels", labelsForRow);
-            } else if (fileType == FileType.JSON) {
+            } else if (fileExtension == FileExtension.JSON) {
                 List<String> labelsForRow = annotationsByRowNum.getOrDefault(rowCount, List.of()).stream()
                         .map(a -> a.getLabel().getName())
                         .toList();

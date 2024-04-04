@@ -9,7 +9,8 @@ import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
-import ru.turbogoose.cca.backend.components.datasets.model.FileType;
+import ru.turbogoose.cca.backend.components.datasets.model.Dataset;
+import ru.turbogoose.cca.backend.components.datasets.model.FileExtension;
 import ru.turbogoose.cca.backend.components.datasets.service.DatasetService;
 
 import java.io.IOException;
@@ -57,13 +58,16 @@ public class DatasetController {
 
     @GetMapping("/{id}/download")
     public void downloadFile(@PathVariable int id,
-                             @RequestParam(value = "ext", required = false) FileType fileType,
+                             @RequestParam(value = "ext", required = false) FileExtension extension,
                              HttpServletResponse response) throws IOException {
-        if (fileType == null) {
-            fileType = FileType.CSV;
-        }
-        String datasetName = datasetService.downloadDataset(id, fileType, response.getOutputStream());
+        extension = extension == null ? FileExtension.CSV : extension;
+        Dataset dataset = datasetService.getDatasetById(id);
         response.setHeader("Content-Disposition",
-                "attachment; filename=\"" + datasetName + "." + fileType.name().toLowerCase() + "\"");
+                "attachment; filename=\"%s\"".formatted(composeDatasetFileName(dataset, extension)));
+        datasetService.downloadDataset(dataset, extension, response.getOutputStream());
+    }
+
+    private String composeDatasetFileName(Dataset dataset, FileExtension extension) {
+        return dataset.getName() + "." + extension.name().toLowerCase();
     }
 }
