@@ -22,7 +22,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 
 @Service
@@ -32,19 +31,19 @@ public class ElasticsearchService {
     private static final String TIE_BREAKER_ID = "tie_breaker_id";
     @Value("${elasticsearch.query.timeout:1m}")
     private String queryTimeout;
+    @Value("${elasticsearch.download.batch.size:10000}")
+    private int downloadBatchSize;
 
     private final ElasticsearchClient esClient;
     private final ObjectMapper objectMapper;
 
     public void createIndex(String indexName, ArrayNode records) {
         BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
-
         int counter = 0;
-        for (Map<String, String> record : records) {
-            int recordNum = counter++;
         for (JsonNode node : records) {
             int recordNum = ++counter;
             ObjectNode record = (ObjectNode) node;
+            record.put(TIE_BREAKER_ID, recordNum);
             bulkBuilder.operations(op -> op
                     .index(idx -> idx
                             .index(indexName)
@@ -88,14 +87,14 @@ public class ElasticsearchService {
                                             "*", hf -> hf)),
                     ObjectNode.class
             );
-            return extractHitsWithHighlightsAndConvertToJson(response);
+            return extractHitsWithHighlightsAndComposeResult(response);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
 
-    private ObjectNode extractHitsWithHighlightsAndConvertToJson(SearchResponse<ObjectNode> response) {
+    private ObjectNode extractHitsWithHighlightsAndComposeResult(SearchResponse<ObjectNode> response) {
         ObjectNode resultNode = objectMapper.createObjectNode();
         resultNode.put("timeout", response.timedOut());
         TotalHits total = response.hits().total();
@@ -107,6 +106,7 @@ public class ElasticsearchService {
         for (Hit<ObjectNode> hit : response.hits().hits()) {
             ObjectNode source = hit.source();
             if (source != null) {
+                source.remove(TIE_BREAKER_ID);
                 ObjectNode dataNode = objectMapper.createObjectNode();
                 dataNode.put("num", Long.valueOf(hit.id()));
 
@@ -140,17 +140,18 @@ public class ElasticsearchService {
                     ObjectNode.class
             );
             log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
-            return extractHitsAndConvertToJson(response);
+            return extractHitsAndComposeResult(response);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
-    private ArrayNode extractHitsAndConvertToJson(SearchResponse<ObjectNode> response) {
+    private ArrayNode extractHitsAndComposeResult(SearchResponse<ObjectNode> response) {
         ArrayNode resultArray = objectMapper.createArrayNode();
         for (Hit<ObjectNode> hit : response.hits().hits()) {
             ObjectNode source = hit.source();
             if (source != null) {
+                source.remove(TIE_BREAKER_ID);
                 ObjectNode data = objectMapper.createObjectNode();
                 data.set("source", source);
                 data.put("num", Long.valueOf(hit.id()));
@@ -164,6 +165,52 @@ public class ElasticsearchService {
         try {
             esClient.indices().delete(d -> d
                     .index(indexName));
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    public ArrayNode getAllDocuments(String indexName) {
+        try {
+            ArrayNode table = objectMapper.createArrayNode();
+            List<Hit<ObjectNode>> hits = esClient.search(g1 -> g1
+                            .index(indexName)
+                            .size(downloadBatchSize)
+                            .query(q1 -> q1
+                                    .matchAll(m1 -> m1))
+                            .sort(so1 -> so1
+                                    .field(FieldSort.of(f1 -> f1
+                                            .field(TIE_BREAKER_ID)
+                                            .order(SortOrder.Asc)))),
+                    ObjectNode.class
+            ).hits().hits();
+            // TODO: add move verbose logging
+            while (true) {
+                for (Hit<ObjectNode> hit : hits) {
+                    ObjectNode source = hit.source();
+                    if (source != null) {
+                        source.remove(TIE_BREAKER_ID);
+                        table.add(source);
+                    }
+                }
+                if (hits.size() < downloadBatchSize) {
+                    break;
+                }
+                long searchAfter = hits.getLast().sort().getFirst().longValue();
+                hits = esClient.search(g1 -> g1
+                                .index(indexName)
+                                .size(downloadBatchSize)
+                                .query(q1 -> q1
+                                        .matchAll(m1 -> m1))
+                                .sort(so1 -> so1
+                                        .field(FieldSort.of(f1 -> f1
+                                                .field(TIE_BREAKER_ID)
+                                                .order(SortOrder.Asc))))
+                                .searchAfter(searchAfter),
+                        ObjectNode.class
+                ).hits().hits();
+            }
+            return table;
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }

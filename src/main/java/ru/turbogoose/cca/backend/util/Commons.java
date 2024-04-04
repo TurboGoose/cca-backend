@@ -1,15 +1,15 @@
 package ru.turbogoose.cca.backend.util;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.*;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,6 +41,7 @@ public class Commons {
         try (Reader in = new InputStreamReader(fileStream)) {
             CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
                     .setHeader().setSkipHeaderRecord(true)
+                    .setIgnoreEmptyLines(true)
                     .build();
             CSVParser parser = csvFormat.parse(in);
             List<CSVRecord> records = parser.getRecords();
@@ -53,6 +54,26 @@ public class Commons {
             return jsonRecords;
         } catch (IOException exc) {
             throw new RuntimeException(exc);
+        }
+    }
+
+    public static void writeJsonAsCsv(ArrayNode array, OutputStream outputStream) {
+        if (array.isEmpty()) {
+            return;
+        }
+
+        List<String> headers = new LinkedList<>();
+        array.get(0).fieldNames().forEachRemaining(headers::add);
+        CSVFormat format = CSVFormat.DEFAULT.builder()
+                .setHeader(headers.toArray(String[]::new))
+                .build();
+
+        try (CSVPrinter csvPrinter = new CSVPrinter(new OutputStreamWriter(outputStream), format)) {
+            for (JsonNode node : array) { // TODO: optimize using piping?
+                csvPrinter.printRecord(headers.stream().map(h -> node.get(h).asText()));
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }

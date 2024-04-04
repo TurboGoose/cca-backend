@@ -18,11 +18,15 @@ import ru.turbogoose.cca.backend.model.Dataset;
 import ru.turbogoose.cca.backend.repository.AnnotationRepository;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
 import ru.turbogoose.cca.backend.repository.LabelRepository;
+import ru.turbogoose.cca.backend.util.Commons;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static ru.turbogoose.cca.backend.util.Commons.removeExtension;
@@ -152,5 +156,13 @@ public class DatasetService {
                 .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
         ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query, pageable);
         return searchResponse.toString();
+    }
+
+    public String downloadDataset(int datasetId, OutputStream outputStream) {
+        Dataset dataset = datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
+        ArrayNode allDocuments = elasticsearchService.getAllDocuments(dataset.getName());
+        Commons.writeJsonAsCsv(allDocuments, outputStream);
+        return dataset.getName();
     }
 }
