@@ -1,6 +1,7 @@
 package ru.turbogoose.cca.backend.controller;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.convert.ConversionFailedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,9 +13,9 @@ import ru.turbogoose.cca.backend.util.Commons;
 @RestControllerAdvice
 @Slf4j
 public class GlobalControllerAdvice {
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({IllegalArgumentException.class, ConversionFailedException.class})
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponseDto handle(IllegalArgumentException exception) {
+    public ErrorResponseDto handle(RuntimeException exception) {
         log.error("", exception);
         return composeErrorResponse(exception.getMessage());
     }

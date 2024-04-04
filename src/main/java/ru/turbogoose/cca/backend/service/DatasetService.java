@@ -15,6 +15,7 @@ import ru.turbogoose.cca.backend.dto.*;
 import ru.turbogoose.cca.backend.model.Annotation;
 import ru.turbogoose.cca.backend.model.AnnotationId;
 import ru.turbogoose.cca.backend.model.Dataset;
+import ru.turbogoose.cca.backend.model.FileType;
 import ru.turbogoose.cca.backend.repository.AnnotationRepository;
 import ru.turbogoose.cca.backend.repository.DatasetRepository;
 import ru.turbogoose.cca.backend.repository.LabelRepository;
@@ -168,26 +169,38 @@ public class DatasetService {
         return searchResponse.toString();
     }
 
-    public String downloadDataset(int datasetId, OutputStream outputStream) {
+    public String downloadDataset(int datasetId, FileType fileType, OutputStream outputStream) {
         Dataset dataset = datasetRepository.findById(datasetId)
                 .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
 
         ArrayNode allRows = elasticsearchService.getAllDocuments(dataset.getName());
         Map<Long, List<Annotation>> annotations = getAnnotations(datasetId);
-        enrichRowsWithAnnotationNames(allRows, annotations);
+        enrichRowsWithAnnotationNames(allRows, annotations, fileType);
 
-        Commons.writeJsonDatasetAsCsv(allRows, outputStream);
+        if (fileType == FileType.CSV) {
+            Commons.writeJsonDatasetAsCsv(allRows, outputStream);
+        } else if (fileType == FileType.JSON) {
+            Commons.writeJsonDataset(allRows, outputStream);
+        }
         return dataset.getName();
     }
 
-    private void enrichRowsWithAnnotationNames(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum) {
-        long count = 0;
+    private void enrichRowsWithAnnotationNames(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum, FileType fileType) {
+        long rowCount = 1;
         for (JsonNode node : rows) {
             ObjectNode row = (ObjectNode) node;
-            String labelsForRow = annotationsByRowNum.getOrDefault(++count, List.of()).stream()
-                    .map(a -> a.getLabel().getName())
-                    .collect(Collectors.joining(";"));
-            row.put("labels", labelsForRow);
+            if (fileType == FileType.CSV) {
+                String labelsForRow = annotationsByRowNum.getOrDefault(rowCount, List.of()).stream()
+                        .map(a -> a.getLabel().getName())
+                        .collect(Collectors.joining(";"));
+                row.put("labels", labelsForRow);
+            } else if (fileType == FileType.JSON) {
+                List<String> labelsForRow = annotationsByRowNum.getOrDefault(rowCount, List.of()).stream()
+                        .map(a -> a.getLabel().getName())
+                        .toList();
+                row.set("labels", objectMapper.valueToTree(labelsForRow));
+            }
+            rowCount++;
         }
     }
 }

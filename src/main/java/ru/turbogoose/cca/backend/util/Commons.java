@@ -76,4 +76,15 @@ public class Commons {
             throw new RuntimeException(e);
         }
     }
+
+    public static void writeJsonDataset(ArrayNode array, OutputStream outputStream) {
+        if (array.isEmpty()) {
+            return;
+        }
+        try {
+            new ObjectMapper().writeValue(outputStream, array);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

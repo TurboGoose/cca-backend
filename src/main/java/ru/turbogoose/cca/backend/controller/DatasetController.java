@@ -9,6 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.dto.DatasetResponseDto;
+import ru.turbogoose.cca.backend.model.FileType;
 import ru.turbogoose.cca.backend.service.DatasetService;
 
 import java.io.IOException;
@@ -55,9 +56,14 @@ public class DatasetController {
     }
 
     @GetMapping("/{id}/download")
-    public void downloadFile(@PathVariable int id, HttpServletResponse response) throws IOException {
-        String datasetName = datasetService.downloadDataset(id, response.getOutputStream());
-        response.setHeader("Content-Disposition", // FIXME: headers not getting set
-                String.format("attachment; filename=\"%s\"", datasetName + ".csv"));
+    public void downloadFile(@PathVariable int id,
+                             @RequestParam(value = "ext", required = false) FileType fileType,
+                             HttpServletResponse response) throws IOException {
+        if (fileType == null) {
+            fileType = FileType.CSV;
+        }
+        String datasetName = datasetService.downloadDataset(id, fileType, response.getOutputStream());
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + datasetName + "." + fileType.name().toLowerCase() + "\"");
     }
 }
