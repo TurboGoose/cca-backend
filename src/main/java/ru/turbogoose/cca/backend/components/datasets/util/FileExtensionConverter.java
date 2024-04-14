@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import ru.turbogoose.cca.backend.components.datasets.model.FileExtension;
 
 @Component
-public class FileTypeConverter implements Converter<String, FileExtension> {
+public class FileExtensionConverter implements Converter<String, FileExtension> {
     @Override
     public FileExtension convert(String source) {
         return FileExtension.valueOf(source.toUpperCase());
