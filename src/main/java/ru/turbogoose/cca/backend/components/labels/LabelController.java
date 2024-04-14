@@ -1,11 +1,10 @@
-package ru.turbogoose.cca.backend.components.labels.controller;
+package ru.turbogoose.cca.backend.components.labels;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelListResponseDto;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
-import ru.turbogoose.cca.backend.components.labels.service.LabelService;
 
 @RequiredArgsConstructor
 @RestController

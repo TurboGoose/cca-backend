@@ -1,7 +1,7 @@
-package ru.turbogoose.cca.backend.components.labels.repository;
+package ru.turbogoose.cca.backend.components.labels;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import ru.turbogoose.cca.backend.components.labels.model.Label;
+import ru.turbogoose.cca.backend.components.labels.Label;
 
 import java.util.List;
 

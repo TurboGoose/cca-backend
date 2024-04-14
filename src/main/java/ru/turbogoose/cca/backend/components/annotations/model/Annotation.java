@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-import ru.turbogoose.cca.backend.components.labels.model.Label;
+import ru.turbogoose.cca.backend.components.labels.Label;
 
 @Data
 @Builder

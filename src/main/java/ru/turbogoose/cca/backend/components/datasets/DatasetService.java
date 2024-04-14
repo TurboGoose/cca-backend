@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.datasets.service;
+package ru.turbogoose.cca.backend.components.datasets;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,9 +15,7 @@ import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 import ru.turbogoose.cca.backend.components.annotations.service.AnnotationService;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
-import ru.turbogoose.cca.backend.components.datasets.model.Dataset;
-import ru.turbogoose.cca.backend.components.datasets.model.FileExtension;
-import ru.turbogoose.cca.backend.components.datasets.repository.DatasetRepository;
+import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.components.search.ElasticsearchService;
 

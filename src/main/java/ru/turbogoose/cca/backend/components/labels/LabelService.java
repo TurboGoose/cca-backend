@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.labels.service;
+package ru.turbogoose.cca.backend.components.labels;
 
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -6,10 +6,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelListResponseDto;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
-import ru.turbogoose.cca.backend.components.datasets.model.Dataset;
-import ru.turbogoose.cca.backend.components.labels.model.Label;
-import ru.turbogoose.cca.backend.components.datasets.repository.DatasetRepository;
-import ru.turbogoose.cca.backend.components.labels.repository.LabelRepository;
+import ru.turbogoose.cca.backend.components.datasets.Dataset;
+import ru.turbogoose.cca.backend.components.labels.Label;
+import ru.turbogoose.cca.backend.components.datasets.DatasetRepository;
+import ru.turbogoose.cca.backend.components.labels.LabelRepository;
 
 import java.util.List;
 

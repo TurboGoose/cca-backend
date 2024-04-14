@@ -2,7 +2,6 @@ package ru.turbogoose.cca.backend.components.datasets.util;
 
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.stereotype.Component;
-import ru.turbogoose.cca.backend.components.datasets.model.FileExtension;
 
 @Component
 public class FileExtensionConverter implements Converter<String, FileExtension> {

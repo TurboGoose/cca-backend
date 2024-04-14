@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.datasets.controller;
+package ru.turbogoose.cca.backend.components.datasets;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -10,9 +10,7 @@ import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.components.annotations.service.AnnotationService;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
-import ru.turbogoose.cca.backend.components.datasets.model.Dataset;
-import ru.turbogoose.cca.backend.components.datasets.model.FileExtension;
-import ru.turbogoose.cca.backend.components.datasets.service.DatasetService;
+import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 
 import java.io.IOException;
 
