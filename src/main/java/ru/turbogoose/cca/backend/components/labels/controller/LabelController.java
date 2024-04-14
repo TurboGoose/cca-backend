@@ -9,6 +9,7 @@ import ru.turbogoose.cca.backend.components.labels.service.LabelService;
 
 @RequiredArgsConstructor
 @RestController
+@CrossOrigin
 @RequestMapping("/api/datasets/{datasetId}/labels")
 public class LabelController {
     private final LabelService labelService;

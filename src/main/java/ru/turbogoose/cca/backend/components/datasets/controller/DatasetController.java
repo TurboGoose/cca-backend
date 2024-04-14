@@ -18,6 +18,7 @@ import java.io.IOException;
 
 @RequiredArgsConstructor
 @RestController
+@CrossOrigin
 @RequestMapping("/api/datasets")
 public class DatasetController {
     private final DatasetService datasetService;
