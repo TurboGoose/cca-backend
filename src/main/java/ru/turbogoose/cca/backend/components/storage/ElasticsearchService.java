@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.search;
+package ru.turbogoose.cca.backend.components.storage;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldSort;
@@ -22,12 +22,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ElasticsearchService {
+public class ElasticsearchService implements Searcher, Storage {
     private static final String TIE_BREAKER_ID = "tie_breaker_id";
     @Value("${elasticsearch.query.timeout:1m}")
     private String queryTimeout;
@@ -36,36 +39,10 @@ public class ElasticsearchService {
 
     private final ElasticsearchClient esClient;
     private final ObjectMapper objectMapper;
+    private final Map<String, Boolean> availabilityByIndexName = new ConcurrentHashMap<>();
 
-    public void createIndex(String indexName, ArrayNode records) {
-        BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
-        int counter = 0;
-        for (JsonNode node : records) {
-            int recordNum = ++counter;
-            ObjectNode record = (ObjectNode) node;
-            record.put(TIE_BREAKER_ID, recordNum);
-            bulkBuilder.operations(op -> op
-                    .index(idx -> idx
-                            .index(indexName)
-                            .id(recordNum + "")
-                            .document(record)));
-        }
-        try {
-            BulkResponse result = esClient.bulk(bulkBuilder.build());
-            if (result.errors()) {
-                log.error("Bulk had errors"); // TODO: add move verbose logging
-                for (BulkResponseItem item : result.items()) {
-                    if (item.error() != null) {
-                        log.error(item.error().reason());
-                    }
-                }
-            }
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
-        }
-    }
-
-    public ObjectNode search(String indexName, String query, Pageable pageable) {
+    @Override
+    public JsonNode search(String indexName, String query, Pageable pageable) {
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
@@ -94,7 +71,7 @@ public class ElasticsearchService {
     }
 
 
-    private ObjectNode extractHitsWithHighlightsAndComposeResult(SearchResponse<ObjectNode> response) {
+    private JsonNode extractHitsWithHighlightsAndComposeResult(SearchResponse<ObjectNode> response) {
         ObjectNode resultNode = objectMapper.createObjectNode();
         resultNode.put("timeout", response.timedOut());
         TotalHits total = response.hits().total();
@@ -121,56 +98,53 @@ public class ElasticsearchService {
                 resultArray.add(dataNode);
             }
         }
-
         resultNode.set("rows", resultArray);
         return resultNode;
     }
 
-
-    public ArrayNode getDocuments(String indexName, Pageable pageable) {
+    @Override
+    public void create(String indexName) {
         try {
-            int from = (int) pageable.getOffset();
-            int size = pageable.getPageSize();
-            SearchResponse<ObjectNode> response = esClient.search(g -> g
-                            .index(indexName)
-                            .from(from)
-                            .size(size)
-                            .query(q -> q
-                                    .matchAll(m -> m)),
-                    ObjectNode.class
-            );
-            log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
-            return extractHitsAndComposeResult(response);
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
-        }
-    }
-
-    private ArrayNode extractHitsAndComposeResult(SearchResponse<ObjectNode> response) {
-        ArrayNode resultArray = objectMapper.createArrayNode();
-        for (Hit<ObjectNode> hit : response.hits().hits()) {
-            ObjectNode source = hit.source();
-            if (source != null) {
-                source.remove(TIE_BREAKER_ID);
-                ObjectNode data = objectMapper.createObjectNode();
-                data.set("source", source);
-                data.put("num", Long.valueOf(hit.id()));
-                resultArray.add(data);
-            }
-        }
-        return resultArray;
-    }
-
-    public void deleteIndex(String indexName) {
-        try {
-            esClient.indices().delete(d -> d
+            esClient.create(c -> c
                     .index(indexName));
+            availabilityByIndexName.put(indexName, false);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
-    public ArrayNode getAllDocuments(String indexName) {
+    @Override
+    public void upload(String indexName, InputStream in) {
+        BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
+        int counter = 0;
+        for (JsonNode node : records) {
+            int recordNum = ++counter;
+            ObjectNode record = (ObjectNode) node;
+            record.put(TIE_BREAKER_ID, recordNum);
+            bulkBuilder.operations(op -> op
+                    .index(idx -> idx
+                            .index(indexName)
+                            .id(recordNum + "")
+                            .document(record)));
+        }
+        try {
+            BulkResponse result = esClient.bulk(bulkBuilder.build());
+            if (result.errors()) {
+                log.error("Bulk had errors"); // TODO: rewrite for ingester
+                for (BulkResponseItem item : result.items()) {
+                    if (item.error() != null) {
+                        log.error(item.error().reason());
+                    }
+                }
+            }
+            availabilityByIndexName.put(indexName, true);
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    @Override
+    public InputStream download(String indexName) {
         try {
             ArrayNode table = objectMapper.createArrayNode();
             List<Hit<ObjectNode>> hits = esClient.search(g1 -> g1
@@ -214,5 +188,56 @@ public class ElasticsearchService {
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
+    }
+
+    @Override
+    public ArrayNode getPage(String indexName, Pageable pageable) {
+        try {
+            int from = (int) pageable.getOffset();
+            int size = pageable.getPageSize();
+            SearchResponse<ObjectNode> response = esClient.search(g -> g
+                            .index(indexName)
+                            .from(from)
+                            .size(size)
+                            .query(q -> q
+                                    .matchAll(m -> m)),
+                    ObjectNode.class
+            );
+            log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
+            return extractHitsAndComposeResult(response);
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    private ArrayNode extractHitsAndComposeResult(SearchResponse<ObjectNode> response) {
+        ArrayNode resultArray = objectMapper.createArrayNode();
+        for (Hit<ObjectNode> hit : response.hits().hits()) {
+            ObjectNode source = hit.source();
+            if (source != null) {
+                source.remove(TIE_BREAKER_ID);
+                ObjectNode data = objectMapper.createObjectNode();
+                data.set("source", source);
+                data.put("num", Long.valueOf(hit.id()));
+                resultArray.add(data);
+            }
+        }
+        return resultArray;
+    }
+
+    @Override
+    public void delete(String indexName) {
+        try {
+            esClient.delete(d -> d
+                    .index(indexName));
+            availabilityByIndexName.remove(indexName);
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    @Override
+    public boolean isAvailable(String indexName) {
+        return availabilityByIndexName.get(indexName);
     }
 }

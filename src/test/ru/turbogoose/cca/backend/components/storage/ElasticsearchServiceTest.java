@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.search;
+package ru.turbogoose.cca.backend.components.storage;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
@@ -50,7 +50,7 @@ class ElasticsearchServiceTest {
         return new ElasticsearchClient(transport);
     }
 
-    public static ElasticsearchService service = new ElasticsearchService(initElasticsearchClient(), new ObjectMapper());
+    public static Searcher service = new ElasticsearchService(initElasticsearchClient(), new ObjectMapper());
 
     @Test
     public void runBenchmarks() {

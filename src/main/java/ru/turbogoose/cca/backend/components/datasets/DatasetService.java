@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,9 +19,11 @@ import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
-import ru.turbogoose.cca.backend.components.search.ElasticsearchService;
+import ru.turbogoose.cca.backend.components.storage.Searcher;
+import ru.turbogoose.cca.backend.components.storage.Storage;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,17 +32,34 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
-import static ru.turbogoose.cca.backend.components.datasets.util.FileConversionUtil.*;
+import static ru.turbogoose.cca.backend.components.datasets.util.FileConversionUtil.writeJsonDataset;
+import static ru.turbogoose.cca.backend.components.datasets.util.FileConversionUtil.writeJsonDatasetAsCsv;
 
-@Service
 @Slf4j
-@RequiredArgsConstructor
 public class DatasetService {
     private final DatasetRepository datasetRepository;
-    private final ElasticsearchService elasticsearchService;
     private final AnnotationService annotationService;
     private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
+    private final Searcher searcher;
+    private final Storage primaryStorage;
+    private final Storage secondaryStorage;
+
+    public DatasetService(DatasetRepository datasetRepository,
+                          AnnotationService annotationService,
+                          ModelMapper mapper,
+                          ObjectMapper objectMapper,
+                          Searcher searcher,
+                          @Qualifier("elasticSearchService") Storage primaryStorage,
+                          @Qualifier("fileSystemTempStorage") Storage secondaryStorage) {
+        this.datasetRepository = datasetRepository;
+        this.annotationService = annotationService;
+        this.mapper = mapper;
+        this.objectMapper = objectMapper;
+        this.secondaryStorage = secondaryStorage;
+        this.primaryStorage = primaryStorage;
+        this.searcher = searcher;
+    }
 
     public Dataset getDatasetById(int datasetId) {
         return datasetRepository.findById(datasetId)
@@ -59,15 +80,28 @@ public class DatasetService {
         String datasetName = removeExtension(file.getOriginalFilename());
 
         try {
-            ArrayNode datasetRecords = readCsvDatasetToJson(file.getInputStream());
             Dataset dataset = Dataset.builder()
                     .name(datasetName)
                     .size(file.getSize())
-                    .totalRows(datasetRecords.size())
                     .created(LocalDateTime.now())
                     .build();
             datasetRepository.save(dataset); // integrity violation on duplicate
-            elasticsearchService.createIndex(dataset.getName(), datasetRecords);
+            log.debug("[{}] saved to db", datasetName);
+            secondaryStorage.upload(datasetName, file.getInputStream());
+            log.debug("[{}] saved to secondary storage", datasetName);
+            new Thread(() -> {
+                try (InputStream in = secondaryStorage.download(datasetName)) {
+                    primaryStorage.create(datasetName);
+                    primaryStorage.upload(datasetName, in);
+                    log.debug("[{}] saved to primary storage", datasetName);
+                    // isAvailable = true?
+                    secondaryStorage.delete(datasetName);
+                    log.debug("[{}] deleted from secondary storage", datasetName);
+                } catch (IOException exc) {
+                    log.error("[{}] failed to save to primary storage", datasetName, exc);
+                    throw new RuntimeException(exc);
+                }
+            }).start();
             return mapper.map(dataset, DatasetResponseDto.class);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
@@ -82,8 +116,8 @@ public class DatasetService {
 
     public String getDatasetPage(int datasetId, Pageable pageable) {
         Dataset dataset = getDatasetById(datasetId);
-
-        ArrayNode rows = elasticsearchService.getDocuments(dataset.getName(), pageable); // TODO: make async
+        Storage storage = getStorage(dataset.getName());
+        ArrayNode rows = storage.getPage(dataset.getName(), pageable); // TODO: make async
         Map<Long, List<Annotation>> annotationsByRowNum = annotationService.getAnnotations(datasetId, pageable);
         enrichRowsWithAnnotations(rows, annotationsByRowNum);
         return composeJsonPageResponse(rows);
@@ -112,6 +146,7 @@ public class DatasetService {
         dataset.setName(newName);
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
+        // TODO: rename index and temp storage
         return mapper.map(dataset, DatasetResponseDto.class);
     }
 
@@ -120,18 +155,25 @@ public class DatasetService {
         Optional<Dataset> datasetOpt = datasetRepository.findById(datasetId);
         if (datasetOpt.isPresent()) {
             datasetRepository.deleteById(datasetId);
-            elasticsearchService.deleteIndex(datasetOpt.get().getName());
+            String datasetName = datasetOpt.get().getName();
+            Storage storage = getStorage(datasetName);
+            storage.delete(datasetName);
         }
     }
 
     public String search(int datasetId, String query, Pageable pageable) {
         Dataset dataset = getDatasetById(datasetId);
-        ObjectNode searchResponse = elasticsearchService.search(dataset.getName(), query, pageable);
-        return searchResponse.toString();
+        String datasetName = dataset.getName();
+        if (!searcher.isAvailable(datasetName)) {
+            throw new IllegalStateException("Searcher for dataset %s not available yet".formatted(datasetName));
+        }
+        return searcher.search(datasetName, query, pageable).toString();
     }
 
     public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream outputStream) {
-        ArrayNode allRows = elasticsearchService.getAllDocuments(dataset.getName());
+        String datasetName = dataset.getName();
+        Storage storage = getStorage(datasetName);
+        ArrayNode allRows = storage.download(dataset.getName());
         Map<Long, List<Annotation>> annotations = annotationService.getAnnotations(dataset.getId());
         enrichRowsWithAnnotationNames(allRows, annotations, fileExtension);
 
@@ -159,5 +201,15 @@ public class DatasetService {
             }
             rowCount++;
         }
+    }
+
+    private Storage getStorage(String storageName) {
+        if (primaryStorage.isAvailable(storageName)) {
+            return primaryStorage;
+        }
+        if (secondaryStorage.isAvailable(storageName)) {
+            return secondaryStorage;
+        }
+        throw new IllegalStateException("Storage %s not available yet".formatted(storageName));
     }
 }
