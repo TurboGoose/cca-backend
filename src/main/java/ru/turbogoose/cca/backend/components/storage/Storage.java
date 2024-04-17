@@ -1,15 +1,17 @@
 package ru.turbogoose.cca.backend.components.storage;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.springframework.data.domain.Pageable;
 
 import java.io.InputStream;
+import java.util.stream.Stream;
 
-public interface Storage {
-    void create(String storageName);
+public interface Storage<T> {
+    String create(String storageName);
+    void upload(String storageName, Stream<T> in);
     void upload(String storageName, InputStream in);
+    Stream<T> getAll(String storageName);
     InputStream download(String storageName);
-    void delete(String storageName);
-    ArrayNode getPage(String storageName, Pageable pageable);
+    Stream<T> getPage(String storageName, Pageable pageable);
     boolean isAvailable(String storageName);
+    void delete(String storageName);
 }
