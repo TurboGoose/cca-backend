@@ -26,13 +26,9 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
 
     public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder:#{null}}") String rootFolderPath) {
         try {
-            if (rootFolderPath != null) {
-                Path path = Path.of(rootFolderPath);
-                Files.createDirectories(path);
-                this.rootFolderPath = Files.createTempDirectory(path, null);
-            } else {
-                this.rootFolderPath = Files.createTempDirectory(null);
-            }
+            this.rootFolderPath = rootFolderPath != null
+                    ? Files.createDirectories(Path.of(rootFolderPath))
+                    : Files.createTempDirectory(null);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
