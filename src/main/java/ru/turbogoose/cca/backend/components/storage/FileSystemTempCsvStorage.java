@@ -1,22 +1,29 @@
 package ru.turbogoose.cca.backend.components.storage;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.io.*;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 @Service
-public class FileSystemTempStorage implements Storage<String> {
+public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     private final Path rootFolderPath;
     private final Map<String, Path> pathByStorageName = new ConcurrentHashMap<>();
 
-    public FileSystemTempStorage(@Value("${storage.fstmp.folder}") String rootFolderPath) {
+    public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder}") String rootFolderPath) {
         try {
             this.rootFolderPath = rootFolderPath != null
                     ? Files.createTempDirectory(Path.of(rootFolderPath), null)
@@ -38,19 +45,7 @@ public class FileSystemTempStorage implements Storage<String> {
     }
 
     @Override
-    public void upload(String storageName, Stream<String> in) {
-        Path storagePath = getStoragePathAndCreateIfNotExists(storageName);
-        try (in; PrintWriter writer = new PrintWriter(new FileWriter(storagePath.toFile()))) {
-            in.forEach(writer::write);
-        } catch (IOException exc) {
-            deleteStorage(storagePath);
-            throw new RuntimeException(exc);
-        }
-    }
-
-
-    @Override
-    public void upload(String storageName, InputStream in) {
+    public void fill(String storageName, InputStream in) {
         Path storagePath = getStoragePathAndCreateIfNotExists(storageName);
         try (in) {
             in.transferTo(new FileOutputStream(storagePath.toFile()));
@@ -64,35 +59,56 @@ public class FileSystemTempStorage implements Storage<String> {
      * @apiNote Returned stream must be explicitly closed
      */
     @Override
-    public Stream<String> getAll(String storageName) {
+    public Stream<JsonNode> getAll(String storageName) {
         try {
             Path storagePath = getStoragePathOrThrow(storageName);
-            return Files.lines(storagePath);
+            List<String> headers = parseHeaders(storagePath);
+            return Files.lines(storagePath)
+                    .skip(1)
+                    .map(line -> csvLineToJsonNode(line ,headers));
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
-    @Override
-    public InputStream download(String storageName) {
-        try {
-            Path storagePath = getStoragePathOrThrow(storageName);
-            return new FileInputStream(storagePath.toFile());
-        } catch (IOException exc) {
-            throw new RuntimeException();
+    private List<String> parseHeaders(Path storagePath) throws IOException {
+        try (Stream<String> lines = Files.lines(storagePath)) {
+            String headers = lines
+                    .limit(1)
+                    .findFirst().orElseThrow(() ->
+                            new IllegalStateException("Dataset {%s} has no rows".formatted(storagePath)));
+            return List.of(headers.split(","));
         }
+    }
+
+    private JsonNode csvLineToJsonNode(String csvLine, List<String> headers) {
+        ObjectNode node = objectMapper.createObjectNode();
+        String[] split = csvLine.split(",");
+        for (int i = 0; i < headers.size(); i++) {
+            String key = headers.get(i);
+            String value = "";
+            if (i < split.length) {
+                value = split[i];
+            }
+            node.put(key, value);
+        }
+        return node;
     }
 
     /**
      * @apiNote Returned stream must be explicitly closed
      */
     @Override
-    public Stream<String> getPage(String storageName, Pageable pageable) {
+    public Stream<JsonNode> getPage(String storageName, Pageable pageable) {
         try {
             int from = (int) pageable.getOffset(); // TODO: write custom pageable with longs
             int size = pageable.getPageSize();
             Path storagePath = getStoragePathOrThrow(storageName);
-            return Files.lines(storagePath).skip(from - 1).limit(size);
+            List<String> headers = parseHeaders(storagePath);
+            return Files.lines(storagePath)
+                    .skip(from)
+                    .limit(size)
+                    .map(line -> csvLineToJsonNode(line ,headers));
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
