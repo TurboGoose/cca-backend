@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 import ru.turbogoose.cca.backend.components.annotations.model.AnnotationId;
+import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 import ru.turbogoose.cca.backend.components.labels.Label;
+import ru.turbogoose.cca.backend.components.storage.enricher.AnnotationEnricher;
+import ru.turbogoose.cca.backend.components.storage.enricher.EnricherFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -13,8 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 class DatasetServiceTest {
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-    DatasetService service = new DatasetService(null, null, null, null, null, null);
+    static final ObjectMapper objectMapper = new ObjectMapper();
     List<Label> labels;
     List<Annotation> annotations;
     List<JsonNode> data;
@@ -83,8 +85,9 @@ class DatasetServiceTest {
     }
 
     public void runJsonEnrichment() {
+        AnnotationEnricher enricher = EnricherFactory.getEnricher(FileExtension.CSV);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            service.enrichJsonAndWrite(data.stream(), annotations.stream(), out);
+            enricher.enrichAndWrite(data.stream(), annotations.stream(), out);
             System.out.println(out);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
@@ -113,8 +116,9 @@ class DatasetServiceTest {
     }
 
     public void runCsvEnrichment() {
+        AnnotationEnricher enricher = EnricherFactory.getEnricher(FileExtension.CSV);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            service.convertJsonToCsvAndEnrichAndWrite(data.stream(), annotations.stream(), out);
+            enricher.enrichAndWrite(data.stream(), annotations.stream(), out);
             System.out.println(out);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
