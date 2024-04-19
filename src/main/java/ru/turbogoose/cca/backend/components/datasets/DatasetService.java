@@ -1,10 +1,7 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,12 +18,15 @@ import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
+import ru.turbogoose.cca.backend.components.storage.enricher.AnnotationEnricher;
+import ru.turbogoose.cca.backend.components.storage.enricher.EnricherFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
@@ -150,112 +150,8 @@ public class DatasetService {
         String datasetName = dataset.getName();
         try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
              Stream<JsonNode> dataStream = getStorage(datasetName).getAll(datasetName)) {
-            if (fileExtension == FileExtension.JSON) {
-                enrichJsonAndWrite(dataStream, annotationStream, out);
-            } else if (fileExtension == FileExtension.CSV) {
-                convertJsonToCsvAndEnrichAndWrite(dataStream, annotationStream, out);
-            }
-        }
-    }
-
-    void convertJsonToCsvAndEnrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
-        Iterator<JsonNode> dataIterator = dataStream.iterator();
-        if (!dataIterator.hasNext()) {
-            throw new IllegalStateException("Data iterator has no elements");
-        }
-
-        try (PrintWriter writer = new PrintWriter(out)) {
-            Iterable<Annotation> annotationIterable = annotationStream::iterator;
-            long dataRowNum = 1L;
-            JsonNode node = dataIterator.next();
-
-            writer.println(composeHeaders(node));
-            List<String> labelsForCurRow = new ArrayList<>();
-
-            for (Annotation annotation : annotationIterable) {
-                Long targetRowNum = annotation.getId().getRowNum();
-                while (dataRowNum < targetRowNum && dataIterator.hasNext()) {
-                    writer.println(jsonNodeToCsvString(node, labelsForCurRow));
-                    labelsForCurRow.clear();
-                    node = dataIterator.next();
-                    dataRowNum++;
-                }
-                labelsForCurRow.add(annotation.getLabel().getName());
-            }
-
-            writer.println(jsonNodeToCsvString(node, labelsForCurRow));
-
-            while (dataIterator.hasNext()) {
-                writer.println(jsonNodeToCsvString(dataIterator.next()));
-            }
-        }
-    }
-
-    public String composeHeaders(JsonNode node) {
-        List<String> headers = extractHeadersFromNode(node);
-        headers.add("labels");
-        return String.join(",", headers);
-    }
-
-    public List<String> extractHeadersFromNode(JsonNode node) {
-        List<String> headers = new ArrayList<>();
-        node.fieldNames().forEachRemaining(headers::add);
-        return headers;
-    }
-
-    public String jsonNodeToCsvString(JsonNode node) {
-        return jsonNodeToCsvString(node, List.of());
-    }
-
-    public String jsonNodeToCsvString(JsonNode node, List<String> labels) {
-        StringJoiner joiner = new StringJoiner(",");
-        node.fields().forEachRemaining(entry -> joiner.add(entry.getValue().asText()));
-        joiner.add(String.join(";", labels));
-        return joiner.toString();
-    }
-
-
-    void enrichJsonAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
-        Iterator<JsonNode> dataIterator = dataStream.iterator();
-        if (!dataIterator.hasNext()) {
-            throw new IllegalStateException("Data iterator has no elements");
-        }
-
-        JsonFactory factory = new JsonFactory();
-        try (JsonGenerator generator = factory.createGenerator(out)) {
-            generator.writeStartArray();
-            generator.setCodec(objectMapper);
-
-            Iterable<Annotation> annotationIterable = annotationStream::iterator;
-            long dataRowNum = 0L;
-            ObjectNode dataObject = null;
-            for (Annotation annotation : annotationIterable) {
-                Long targetRowNum = annotation.getId().getRowNum();
-                while (dataRowNum < targetRowNum && dataIterator.hasNext()) {
-                    if (dataObject != null) {
-                        generator.writeTree(dataObject);
-                    }
-                    dataObject = (ObjectNode) dataIterator.next();
-                    dataObject.put("num", ++dataRowNum);
-                    dataObject.putArray("labels");
-                }
-                ArrayNode labels = (ArrayNode) dataObject.get("labels");
-                labels.add(annotation.getLabel().getName());
-            }
-
-            while (dataIterator.hasNext()) {
-                if (dataObject != null) {
-                    generator.writeTree(dataObject);
-                }
-                dataObject = (ObjectNode) dataIterator.next();
-                dataObject.put("num", ++dataRowNum);
-                dataObject.putArray("labels");
-            }
-            generator.writeTree(dataObject);
-
-            generator.writeEndArray();
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+            AnnotationEnricher enricher = EnricherFactory.getEnricher(fileExtension);
+            enricher.enrichAndWrite(dataStream, annotationStream, out);
         }
     }
 
