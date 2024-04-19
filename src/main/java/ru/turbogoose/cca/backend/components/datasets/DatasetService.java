@@ -24,11 +24,9 @@ import ru.turbogoose.cca.backend.components.storage.Storage;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.time.LocalDateTime;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
@@ -153,13 +151,71 @@ public class DatasetService {
         try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
              Stream<JsonNode> dataStream = getStorage(datasetName).getAll(datasetName)) {
             if (fileExtension == FileExtension.JSON) {
-                enrichJsonDataAndWrite(dataStream, annotationStream, out);
+                enrichJsonAndWrite(dataStream, annotationStream, out);
+            } else if (fileExtension == FileExtension.CSV) {
+                convertJsonToCsvAndEnrichAndWrite(dataStream, annotationStream, out);
             }
-            // TODO: implement csv
         }
     }
 
-    void enrichJsonDataAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
+    void convertJsonToCsvAndEnrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
+        Iterator<JsonNode> dataIterator = dataStream.iterator();
+        if (!dataIterator.hasNext()) {
+            throw new IllegalStateException("Data iterator has no elements");
+        }
+
+        try (PrintWriter writer = new PrintWriter(out)) {
+            Iterable<Annotation> annotationIterable = annotationStream::iterator;
+            long dataRowNum = 1L;
+            JsonNode node = dataIterator.next();
+
+            writer.println(composeHeaders(node));
+            List<String> labelsForCurRow = new ArrayList<>();
+
+            for (Annotation annotation : annotationIterable) {
+                Long targetRowNum = annotation.getId().getRowNum();
+                while (dataRowNum < targetRowNum && dataIterator.hasNext()) {
+                    writer.println(jsonNodeToCsvString(node, labelsForCurRow));
+                    labelsForCurRow.clear();
+                    node = dataIterator.next();
+                    dataRowNum++;
+                }
+                labelsForCurRow.add(annotation.getLabel().getName());
+            }
+
+            writer.println(jsonNodeToCsvString(node, labelsForCurRow));
+
+            while (dataIterator.hasNext()) {
+                writer.println(jsonNodeToCsvString(dataIterator.next()));
+            }
+        }
+    }
+
+    public String composeHeaders(JsonNode node) {
+        List<String> headers = extractHeadersFromNode(node);
+        headers.add("labels");
+        return String.join(",", headers);
+    }
+
+    public List<String> extractHeadersFromNode(JsonNode node) {
+        List<String> headers = new ArrayList<>();
+        node.fieldNames().forEachRemaining(headers::add);
+        return headers;
+    }
+
+    public String jsonNodeToCsvString(JsonNode node) {
+        return jsonNodeToCsvString(node, List.of());
+    }
+
+    public String jsonNodeToCsvString(JsonNode node, List<String> labels) {
+        StringJoiner joiner = new StringJoiner(",");
+        node.fields().forEachRemaining(entry -> joiner.add(entry.getValue().asText()));
+        joiner.add(String.join(";", labels));
+        return joiner.toString();
+    }
+
+
+    void enrichJsonAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
         Iterator<JsonNode> dataIterator = dataStream.iterator();
         if (!dataIterator.hasNext()) {
             throw new IllegalStateException("Data iterator has no elements");
