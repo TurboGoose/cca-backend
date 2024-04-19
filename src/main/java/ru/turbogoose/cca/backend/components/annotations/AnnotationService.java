@@ -9,13 +9,13 @@ import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.components.annotations.dto.AnnotationDto;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 import ru.turbogoose.cca.backend.components.annotations.model.AnnotationId;
-import ru.turbogoose.cca.backend.components.annotations.AnnotationRepository;
 import ru.turbogoose.cca.backend.components.labels.LabelRepository;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -43,10 +43,7 @@ public class AnnotationService {
         annotationRepository.deleteAllByIdInBatch(annotationIdsToDelete);
     }
 
-    public Map<Long, List<Annotation>> getAnnotations(int datasetId) {
-        return getAnnotations(datasetId, null);
-    }
-
+    // TODO: rewrite for streams?
     public Map<Long, List<Annotation>> getAnnotations(int datasetId, Pageable pageable) {
         List<Annotation> annotations;
         if (pageable == null) {
@@ -58,5 +55,9 @@ public class AnnotationService {
         }
         return annotations.stream()
                 .collect(Collectors.groupingBy(a -> a.getId().getRowNum()));
+    }
+
+    public Stream<Annotation> getAllAnnotations(int datasetId) {
+        return annotationRepository.findAllByDatasetId(datasetId);
     }
 }

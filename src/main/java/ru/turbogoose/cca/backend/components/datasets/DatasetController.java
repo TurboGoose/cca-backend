@@ -7,7 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
-import ru.turbogoose.cca.backend.components.annotations.service.AnnotationService;
+import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
@@ -34,7 +34,7 @@ public class DatasetController {
 
     @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public String getDatasetPage(@PathVariable int id, Pageable pageable) {
-        return datasetService.getDatasetPage(id, pageable);
+        return datasetService.getDatasetPage(id, pageable).toString();
     }
 
     @PatchMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

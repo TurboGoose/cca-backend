@@ -1,5 +1,7 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -7,14 +9,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
-import ru.turbogoose.cca.backend.components.annotations.service.AnnotationService;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
@@ -23,43 +23,28 @@ import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.LocalDateTime;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
-import static ru.turbogoose.cca.backend.components.datasets.util.FileConversionUtil.writeJsonDataset;
-import static ru.turbogoose.cca.backend.components.datasets.util.FileConversionUtil.writeJsonDatasetAsCsv;
 
+@Service
 @Slf4j
+@RequiredArgsConstructor
 public class DatasetService {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final ModelMapper mapper;
     private final DatasetRepository datasetRepository;
     private final AnnotationService annotationService;
-    private final ModelMapper mapper;
-    private final ObjectMapper objectMapper;
     private final Searcher searcher;
-    private final Storage primaryStorage;
-    private final Storage secondaryStorage;
-
-    public DatasetService(DatasetRepository datasetRepository,
-                          AnnotationService annotationService,
-                          ModelMapper mapper,
-                          ObjectMapper objectMapper,
-                          Searcher searcher,
-                          @Qualifier("elasticSearchService") Storage primaryStorage,
-                          @Qualifier("fileSystemTempStorage") Storage secondaryStorage) {
-        this.datasetRepository = datasetRepository;
-        this.annotationService = annotationService;
-        this.mapper = mapper;
-        this.objectMapper = objectMapper;
-        this.secondaryStorage = secondaryStorage;
-        this.primaryStorage = primaryStorage;
-        this.searcher = searcher;
-    }
+    private final Storage<JsonNode, JsonNode> primaryStorage;
+    private final Storage<Object, JsonNode> secondaryStorage;
 
     public Dataset getDatasetById(int datasetId) {
         return datasetRepository.findById(datasetId)
@@ -87,19 +72,15 @@ public class DatasetService {
                     .build();
             datasetRepository.save(dataset); // integrity violation on duplicate
             log.debug("[{}] saved to db", datasetName);
-            secondaryStorage.upload(datasetName, file.getInputStream());
+            secondaryStorage.fill(datasetName, file.getInputStream());
             log.debug("[{}] saved to secondary storage", datasetName);
-            new Thread(() -> {
-                try (InputStream in = secondaryStorage.download(datasetName)) {
+            new Thread(() -> { // TODO: add thread executor
+                try (Stream<JsonNode> dataStream = secondaryStorage.getAll(datasetName)) {
                     primaryStorage.create(datasetName);
-                    primaryStorage.upload(datasetName, in);
+                    primaryStorage.fill(datasetName, dataStream);
                     log.debug("[{}] saved to primary storage", datasetName);
-                    // isAvailable = true?
                     secondaryStorage.delete(datasetName);
                     log.debug("[{}] deleted from secondary storage", datasetName);
-                } catch (IOException exc) {
-                    log.error("[{}] failed to save to primary storage", datasetName, exc);
-                    throw new RuntimeException(exc);
                 }
             }).start();
             return mapper.map(dataset, DatasetResponseDto.class);
@@ -114,16 +95,19 @@ public class DatasetService {
         }
     }
 
-    public String getDatasetPage(int datasetId, Pageable pageable) {
-        Dataset dataset = getDatasetById(datasetId);
-        Storage storage = getStorage(dataset.getName());
-        ArrayNode rows = storage.getPage(dataset.getName(), pageable); // TODO: make async
+    public JsonNode getDatasetPage(int datasetId, Pageable pageable) {
+        String datasetName = getDatasetById(datasetId).getName();
+        List<JsonNode> rows;
+        try (Stream<JsonNode> pageStream = getStorage(datasetName).getPage(datasetName, pageable)) {
+            rows = pageStream.toList();
+        }
+        // TODO: rewrite for streams?
         Map<Long, List<Annotation>> annotationsByRowNum = annotationService.getAnnotations(datasetId, pageable);
         enrichRowsWithAnnotations(rows, annotationsByRowNum);
-        return composeJsonPageResponse(rows);
+        return objectMapper.createArrayNode().addAll(rows);
     }
 
-    private void enrichRowsWithAnnotations(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum) {
+    private void enrichRowsWithAnnotations(Iterable<JsonNode> rows, Map<Long, List<Annotation>> annotationsByRowNum) {
         for (JsonNode node : rows) {
             ObjectNode row = (ObjectNode) node;
             long rowNum = row.get("num").asLong();
@@ -134,19 +118,13 @@ public class DatasetService {
         }
     }
 
-    private String composeJsonPageResponse(ArrayNode rows) {
-        ObjectNode resultNode = objectMapper.createObjectNode();
-        resultNode.set("rows", rows);
-        return resultNode.toString();
-    }
-
     @Transactional
     public DatasetResponseDto renameDataset(int datasetId, String newName) {
         Dataset dataset = getDatasetById(datasetId);
         dataset.setName(newName);
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
-        // TODO: rename index and temp storage
+        // TODO: add cols storage and storage_id in db and change only dataset name
         return mapper.map(dataset, DatasetResponseDto.class);
     }
 
@@ -156,8 +134,7 @@ public class DatasetService {
         if (datasetOpt.isPresent()) {
             datasetRepository.deleteById(datasetId);
             String datasetName = datasetOpt.get().getName();
-            Storage storage = getStorage(datasetName);
-            storage.delete(datasetName);
+            getStorage(datasetName).delete(datasetName);
         }
     }
 
@@ -170,40 +147,60 @@ public class DatasetService {
         return searcher.search(datasetName, query, pageable).toString();
     }
 
-    public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream outputStream) {
+    public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream out) {
         String datasetName = dataset.getName();
-        Storage storage = getStorage(datasetName);
-        ArrayNode allRows = storage.download(dataset.getName());
-        Map<Long, List<Annotation>> annotations = annotationService.getAnnotations(dataset.getId());
-        enrichRowsWithAnnotationNames(allRows, annotations, fileExtension);
-
-        if (fileExtension == FileExtension.CSV) {
-            writeJsonDatasetAsCsv(allRows, outputStream);
-        } else if (fileExtension == FileExtension.JSON) {
-            writeJsonDataset(allRows, outputStream);
-        }
-    }
-
-    private void enrichRowsWithAnnotationNames(ArrayNode rows, Map<Long, List<Annotation>> annotationsByRowNum, FileExtension fileExtension) {
-        long rowCount = 1;
-        for (JsonNode node : rows) {
-            ObjectNode row = (ObjectNode) node;
-            if (fileExtension == FileExtension.CSV) {
-                String labelsForRow = annotationsByRowNum.getOrDefault(rowCount, List.of()).stream()
-                        .map(a -> a.getLabel().getName())
-                        .collect(Collectors.joining(";"));
-                row.put("labels", labelsForRow);
-            } else if (fileExtension == FileExtension.JSON) {
-                List<String> labelsForRow = annotationsByRowNum.getOrDefault(rowCount, List.of()).stream()
-                        .map(a -> a.getLabel().getName())
-                        .toList();
-                row.set("labels", objectMapper.valueToTree(labelsForRow));
+        try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
+             Stream<JsonNode> dataStream = getStorage(datasetName).getAll(datasetName)) {
+            if (fileExtension == FileExtension.JSON) {
+                enrichJsonDataAndWrite(dataStream, annotationStream, out);
             }
-            rowCount++;
+            // TODO: implement csv
         }
     }
 
-    private Storage getStorage(String storageName) {
+    void enrichJsonDataAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
+        Iterator<JsonNode> dataIterator = dataStream.iterator();
+        if (!dataIterator.hasNext()) {
+            throw new IllegalStateException("Data iterator has no elements");
+        }
+
+        JsonFactory factory = new JsonFactory();
+        try (JsonGenerator generator = factory.createGenerator(out)) {
+            generator.writeStartArray();
+            generator.setCodec(objectMapper);
+
+            Iterable<Annotation> annotationIterable = annotationStream::iterator;
+            long dataRowNum = 0L;
+            ObjectNode dataObject = null;
+            for (Annotation annotation : annotationIterable) {
+                Long targetRowNum = annotation.getId().getRowNum();
+                while (dataRowNum < targetRowNum && dataIterator.hasNext()) {
+                    if (dataObject != null) {
+                        generator.writeTree(dataObject);
+                    }
+                    dataObject = (ObjectNode) dataIterator.next();
+                    dataObject.put("num", ++dataRowNum);
+                    dataObject.putArray("labels");
+                }
+                ArrayNode labels = (ArrayNode) dataObject.get("labels");
+                labels.add(annotation.getLabel().getName());
+            }
+
+            while (dataIterator.hasNext()) {
+                generator.writeTree(dataObject);
+                dataObject = (ObjectNode) dataIterator.next();
+                dataObject.put("num", ++dataRowNum);
+                dataObject.putArray("labels");
+            }
+            generator.writeTree(dataObject);
+
+            generator.writeEndArray();
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    private Storage<?, JsonNode> getStorage(String storageName) {
         if (primaryStorage.isAvailable(storageName)) {
             return primaryStorage;
         }
