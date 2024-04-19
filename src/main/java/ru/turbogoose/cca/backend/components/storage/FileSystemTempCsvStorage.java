@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -23,11 +24,15 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     private final Path rootFolderPath;
     private final Map<String, Path> pathByStorageName = new ConcurrentHashMap<>();
 
-    public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder}") String rootFolderPath) {
+    public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder:#{null}}") String rootFolderPath) {
         try {
-            this.rootFolderPath = rootFolderPath != null
-                    ? Files.createTempDirectory(Path.of(rootFolderPath), null)
-                    : Files.createTempDirectory(null);
+            if (rootFolderPath != null) {
+                Path path = Path.of(rootFolderPath);
+                Files.createDirectories(path);
+                this.rootFolderPath = Files.createTempDirectory(path, null);
+            } else {
+                this.rootFolderPath = Files.createTempDirectory(null);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -47,8 +52,8 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     @Override
     public void fill(String storageName, InputStream in) {
         Path storagePath = getStoragePathAndCreateIfNotExists(storageName);
-        try (in) {
-            in.transferTo(new FileOutputStream(storagePath.toFile()));
+        try (in; OutputStream out = new FileOutputStream(storagePath.toFile())) {
+            in.transferTo(out);
         } catch (IOException exc) {
             deleteStorage(storagePath);
             throw new RuntimeException(exc);
@@ -134,7 +139,7 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     }
 
     private Path getStoragePathAndCreateIfNotExists(String storageName) {
-        if (pathByStorageName.containsKey(storageName)) {
+        if (!pathByStorageName.containsKey(storageName)) {
             create(storageName);
         }
         return pathByStorageName.get(storageName);
