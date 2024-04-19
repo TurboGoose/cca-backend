@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.annotations.repository;
+package ru.turbogoose.cca.backend.components.annotations;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
