@@ -75,4 +75,21 @@ class DatasetServiceTest {
             System.out.println(out);
         }
     }
+
+    @Test
+    public void whenNoAnnotationsAtAll() throws IOException {
+        Stream<Annotation> annotationStream = Stream.of();
+
+        Stream<JsonNode> dataStream = Stream.of(
+                objectMapper.valueToTree(Map.of("string", "s1", "integer", 1)),
+                objectMapper.valueToTree(Map.of("string", "s2", "integer", 2)),
+                objectMapper.valueToTree(Map.of("string", "s3", "integer", 3)),
+                objectMapper.valueToTree(Map.of("string", "s4", "integer", 4))
+        );
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            service.enrichJsonDataAndWrite(dataStream, annotationStream, out);
+            System.out.println(out);
+        }
+    }
 }

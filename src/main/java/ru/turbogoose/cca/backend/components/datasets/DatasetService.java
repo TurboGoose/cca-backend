@@ -147,6 +147,7 @@ public class DatasetService {
         return searcher.search(datasetName, query, pageable).toString();
     }
 
+    @Transactional(readOnly = true)
     public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream out) {
         String datasetName = dataset.getName();
         try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
@@ -187,7 +188,9 @@ public class DatasetService {
             }
 
             while (dataIterator.hasNext()) {
-                generator.writeTree(dataObject);
+                if (dataObject != null) {
+                    generator.writeTree(dataObject);
+                }
                 dataObject = (ObjectNode) dataIterator.next();
                 dataObject.put("num", ++dataRowNum);
                 dataObject.putArray("labels");
