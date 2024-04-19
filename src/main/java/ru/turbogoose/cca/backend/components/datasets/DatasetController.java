@@ -57,7 +57,7 @@ public class DatasetController {
         return datasetService.search(id, query, pageable);
     }
 
-    @GetMapping("/{id}/download")
+    @GetMapping(value = "/{id}/download", produces = {"application/csv", "application/json"})
     public void downloadFile(@PathVariable int id,
                              @RequestParam(value = "ext", required = false) FileExtension extension,
                              HttpServletResponse response) throws IOException {
