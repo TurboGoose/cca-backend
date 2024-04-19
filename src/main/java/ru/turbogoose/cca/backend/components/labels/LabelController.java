@@ -19,12 +19,12 @@ public class LabelController {
     }
 
     @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public LabelResponseDto addLabelForDataset(@PathVariable int datasetId, @RequestParam String labelName) {
+    public LabelResponseDto addLabelForDataset(@PathVariable int datasetId, @RequestParam("name") String labelName) {
         return labelService.addLabelForDataset(datasetId, labelName);
     }
 
     @PatchMapping(value = "/{labelId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public LabelResponseDto renameLabel(@PathVariable int labelId, @RequestParam String newName) {
+    public LabelResponseDto renameLabel(@PathVariable int labelId, @RequestParam("name") String newName) {
         return labelService.renameLabel(labelId, newName);
     }
 
