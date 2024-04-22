@@ -15,18 +15,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Stream;
 
-public class CsvEnricher implements AnnotationEnricher {
-    private static final CsvEnricher INSTANCE = new CsvEnricher();
-
-    public static CsvEnricher getInstance() {
-        return INSTANCE;
-    }
-
+public class CsvEnricher {
     private CsvEnricher() {
     }
 
-    @Override
-    public void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
+    public static void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
         Iterator<JsonNode> dataIterator = dataStream.iterator();
         if (!dataIterator.hasNext()) {
             throw new IllegalStateException("Data iterator has no elements");
@@ -63,7 +56,7 @@ public class CsvEnricher implements AnnotationEnricher {
         }
     }
 
-    private CSVFormat composeFormat(JsonNode node) {
+    private static CSVFormat composeFormat(JsonNode node) {
         List<String> headers = new LinkedList<>();
         node.fieldNames().forEachRemaining(headers::add);
         headers.add("labels");
@@ -72,11 +65,11 @@ public class CsvEnricher implements AnnotationEnricher {
                 .build();
     }
 
-    private void printRecordWithoutLabels(JsonNode node, List<String> headers, CSVPrinter printer) throws IOException {
+    private static void printRecordWithoutLabels(JsonNode node, List<String> headers, CSVPrinter printer) throws IOException {
         printRecord(node, List.of(), headers, printer);
     }
 
-    private void printRecord(JsonNode node, List<String> labels, List<String> headers, CSVPrinter printer) throws IOException {
+    private static void printRecord(JsonNode node, List<String> labels, List<String> headers, CSVPrinter printer) throws IOException {
         ObjectNode obj = (ObjectNode) node;
         obj.put("labels", String.join(";", labels));
         printer.printRecord(headers.stream().map(h -> obj.get(h).asText()));

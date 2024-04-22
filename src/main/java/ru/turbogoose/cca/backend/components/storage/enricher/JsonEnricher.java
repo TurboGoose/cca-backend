@@ -13,20 +13,13 @@ import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.stream.Stream;
 
-public class JsonEnricher implements AnnotationEnricher {
+public class JsonEnricher {
     public static final ObjectMapper objectMapper = new ObjectMapper();
-
-    private static final JsonEnricher INSTANCE = new JsonEnricher();
-
-    public static JsonEnricher getInstance() {
-        return INSTANCE;
-    }
 
     private JsonEnricher() {
     }
 
-    @Override
-    public void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
+    public static void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
         Iterator<JsonNode> dataIterator = dataStream.iterator();
         if (!dataIterator.hasNext()) {
             throw new IllegalStateException("Data iterator has no elements");
