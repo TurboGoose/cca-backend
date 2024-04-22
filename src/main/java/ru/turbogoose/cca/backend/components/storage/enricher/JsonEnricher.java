@@ -33,7 +33,8 @@ public class JsonEnricher implements AnnotationEnricher {
         }
 
         JsonFactory factory = new JsonFactory();
-        try (JsonGenerator generator = factory.createGenerator(out)) {
+        try {
+            JsonGenerator generator = factory.createGenerator(out);
             generator.writeStartArray();
             generator.setCodec(objectMapper);
 

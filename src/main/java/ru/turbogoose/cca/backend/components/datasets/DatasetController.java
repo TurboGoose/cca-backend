@@ -13,6 +13,7 @@ import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 
 import java.io.IOException;
+import java.io.OutputStream;
 
 @RequiredArgsConstructor
 @RestController
@@ -65,7 +66,9 @@ public class DatasetController {
         Dataset dataset = datasetService.getDatasetById(id);
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"%s\"".formatted(composeDatasetFileName(dataset, extension)));
-        datasetService.downloadDataset(dataset, extension, response.getOutputStream());
+        try (OutputStream out = response.getOutputStream()) {
+            datasetService.downloadDataset(dataset, extension, out);
+        }
     }
 
     private String composeDatasetFileName(Dataset dataset, FileExtension extension) {
