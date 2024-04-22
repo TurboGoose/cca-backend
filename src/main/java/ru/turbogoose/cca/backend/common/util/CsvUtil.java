@@ -32,7 +32,7 @@ public class CsvUtil {
                 .map(CsvUtil::csvLineToJsonNode);
     }
 
-    public static Stream<CSVRecord> readCsv(Path storagePath) {
+    private static Stream<CSVRecord> readCsv(Path storagePath) {
         try {
             Reader in = new FileReader(storagePath.toFile());
             CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
@@ -46,7 +46,7 @@ public class CsvUtil {
         }
     }
 
-    public static JsonNode csvLineToJsonNode(CSVRecord record) {
+    private static JsonNode csvLineToJsonNode(CSVRecord record) {
         ObjectNode json = objectMapper.createObjectNode();
         json.put("num", record.getRecordNumber());
         for (Map.Entry<String, String> entry : record.toMap().entrySet()) {
