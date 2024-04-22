@@ -1,16 +1,18 @@
 package ru.turbogoose.cca.backend.components.storage.enricher;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
-import org.apache.commons.csv.CSVRecord;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.stream.Stream;
 
 public class CsvEnricher implements AnnotationEnricher {
@@ -30,18 +32,20 @@ public class CsvEnricher implements AnnotationEnricher {
             throw new IllegalStateException("Data iterator has no elements");
         }
 
-        try (PrintWriter writer = new PrintWriter(out)) {
-            Iterable<Annotation> annotationIterable = annotationStream::iterator;
-            long dataRowNum = 1L;
-            JsonNode node = dataIterator.next();
+        long dataRowNum = 1L;
+        JsonNode node = dataIterator.next();
+        CSVFormat csvFormat = composeFormat(node);
+        List<String> headers = List.of(csvFormat.getHeader());
 
-            writer.println(composeHeaders(node));
+        try {
+            CSVPrinter csvPrinter = new CSVPrinter(new OutputStreamWriter(out), csvFormat);
+            Iterable<Annotation> annotationIterable = annotationStream::iterator;
             List<String> labelsForCurRow = new ArrayList<>();
 
             for (Annotation annotation : annotationIterable) {
                 Long targetRowNum = annotation.getId().getRowNum();
                 while (dataRowNum < targetRowNum && dataIterator.hasNext()) {
-                    writer.println(jsonNodeToCsvString(node, labelsForCurRow));
+                    printRecord(node, labelsForCurRow, headers, csvPrinter);
                     labelsForCurRow.clear();
                     node = dataIterator.next();
                     dataRowNum++;
@@ -49,34 +53,32 @@ public class CsvEnricher implements AnnotationEnricher {
                 labelsForCurRow.add(annotation.getLabel().getName());
             }
 
-            writer.println(jsonNodeToCsvString(node, labelsForCurRow));
+            printRecord(node, labelsForCurRow, headers, csvPrinter);
 
             while (dataIterator.hasNext()) {
-                writer.println(jsonNodeToCsvString(dataIterator.next()));
+                printRecordWithoutLabels(dataIterator.next(), headers, csvPrinter);
             }
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
         }
     }
 
-    private String composeHeaders(JsonNode node) {
-        List<String> headers = extractHeadersFromNode(node);
-        headers.add("labels");
-        return String.join(",", headers);
-    }
-
-    private List<String> extractHeadersFromNode(JsonNode node) {
-        List<String> headers = new ArrayList<>();
+    private CSVFormat composeFormat(JsonNode node) {
+        List<String> headers = new LinkedList<>();
         node.fieldNames().forEachRemaining(headers::add);
-        return headers;
+        headers.add("labels");
+        return CSVFormat.DEFAULT.builder()
+                .setHeader(headers.toArray(String[]::new))
+                .build();
     }
 
-    private String jsonNodeToCsvString(JsonNode node) {
-        return jsonNodeToCsvString(node, List.of());
+    private void printRecordWithoutLabels(JsonNode node, List<String> headers, CSVPrinter printer) throws IOException {
+        printRecord(node, List.of(), headers, printer);
     }
 
-    private String jsonNodeToCsvString(JsonNode node, List<String> labels) {
-        StringJoiner joiner = new StringJoiner(",");
-        node.fields().forEachRemaining(entry -> joiner.add(entry.getValue().asText()));
-        joiner.add(String.join(";", labels));
-        return joiner.toString();
+    private void printRecord(JsonNode node, List<String> labels, List<String> headers, CSVPrinter printer) throws IOException {
+        ObjectNode obj = (ObjectNode) node;
+        obj.put("labels", String.join(";", labels));
+        printer.printRecord(headers.stream().map(h -> obj.get(h).asText()));
     }
 }
