@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import ru.turbogoose.cca.backend.common.util.CsvUtil;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -11,13 +12,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
-
-import static ru.turbogoose.cca.backend.common.util.CsvUtil.csvLineToJsonNode;
-import static ru.turbogoose.cca.backend.common.util.CsvUtil.parseHeaders;
 
 @Service
 public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
@@ -61,15 +58,8 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
      */
     @Override
     public Stream<JsonNode> getAll(String storageName) {
-        try {
-            Path storagePath = getStoragePathOrThrow(storageName);
-            List<String> headers = parseHeaders(storagePath);
-            return Files.lines(storagePath)
-                    .skip(1)
-                    .map(line -> csvLineToJsonNode(line ,headers));
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
-        }
+        Path storagePath = getStoragePathOrThrow(storageName);
+        return CsvUtil.readCsvAsJson(storagePath);
     }
 
     /**
@@ -77,18 +67,8 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
      */
     @Override
     public Stream<JsonNode> getPage(String storageName, Pageable pageable) {
-        try {
-            int from = (int) pageable.getOffset(); // TODO: write custom pageable with longs
-            int size = pageable.getPageSize();
-            Path storagePath = getStoragePathOrThrow(storageName);
-            List<String> headers = parseHeaders(storagePath);
-            return Files.lines(storagePath)
-                    .skip(from)
-                    .limit(size)
-                    .map(line -> csvLineToJsonNode(line ,headers));
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
-        }
+        Path storagePath = getStoragePathOrThrow(storageName);
+        return CsvUtil.readCsvPageAsJson(storagePath, pageable);
     }
 
     @Override
