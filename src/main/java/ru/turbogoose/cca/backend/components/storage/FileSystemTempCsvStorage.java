@@ -1,8 +1,6 @@
 package ru.turbogoose.cca.backend.components.storage;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -18,9 +16,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import static ru.turbogoose.cca.backend.common.util.CsvUtil.csvLineToJsonNode;
+import static ru.turbogoose.cca.backend.common.util.CsvUtil.parseHeaders;
+
 @Service
 public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
-    private static final ObjectMapper objectMapper = new ObjectMapper();
     private final Path rootFolderPath;
     private final Map<String, Path> pathByStorageName = new ConcurrentHashMap<>();
 
@@ -70,30 +70,6 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
-    }
-
-    private List<String> parseHeaders(Path storagePath) throws IOException {
-        try (Stream<String> lines = Files.lines(storagePath)) {
-            String headers = lines
-                    .limit(1)
-                    .findFirst().orElseThrow(() ->
-                            new IllegalStateException("Dataset {%s} has no rows".formatted(storagePath)));
-            return List.of(headers.split(","));
-        }
-    }
-
-    private JsonNode csvLineToJsonNode(String csvLine, List<String> headers) {
-        ObjectNode node = objectMapper.createObjectNode();
-        String[] split = csvLine.split(",");
-        for (int i = 0; i < headers.size(); i++) {
-            String key = headers.get(i);
-            String value = "";
-            if (i < split.length) {
-                value = split[i];
-            }
-            node.put(key, value);
-        }
-        return node;
     }
 
     /**
