@@ -1,9 +1,6 @@
 package ru.turbogoose.cca.backend.components.storage.info;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -18,7 +15,9 @@ import ru.turbogoose.cca.backend.components.datasets.Dataset;
 @Table(name="storages")
 public class StorageInfo extends InternalStorageInfo {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+    @Enumerated(EnumType.STRING)
     private StorageMode mode;
     @ManyToOne
     private Dataset dataset;
