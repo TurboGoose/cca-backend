@@ -34,8 +34,10 @@ public class DatasetController {
     }
 
     @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public String getDatasetPage(@PathVariable int id, Pageable pageable) {
-        return datasetService.getDatasetPage(id, pageable).toString();
+    public void getDatasetPage(@PathVariable int id, Pageable pageable, HttpServletResponse response) throws IOException {
+        try (OutputStream out = response.getOutputStream()) {
+            datasetService.getDatasetPage(id, pageable, out);
+        }
     }
 
     @PatchMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -59,10 +61,8 @@ public class DatasetController {
     }
 
     @GetMapping(value = "/{id}/download", produces = {"application/csv", "application/json"})
-    public void downloadFile(@PathVariable int id,
-                             @RequestParam(value = "ext", required = false) FileExtension extension,
+    public void downloadFile(@PathVariable int id, @RequestParam(value = "ext") FileExtension extension,
                              HttpServletResponse response) throws IOException {
-        extension = extension == null ? FileExtension.CSV : extension;
         Dataset dataset = datasetService.getDatasetById(id);
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"%s\"".formatted(composeDatasetFileName(dataset, extension)));

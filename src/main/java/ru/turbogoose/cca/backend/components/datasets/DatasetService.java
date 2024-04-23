@@ -1,8 +1,6 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -15,7 +13,6 @@ import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
-import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
 import ru.turbogoose.cca.backend.components.storage.enricher.AnnotationEnricher;
@@ -28,7 +25,6 @@ import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
@@ -37,19 +33,12 @@ import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
 @Slf4j
 @RequiredArgsConstructor
 public class DatasetService {
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
     private final ModelMapper mapper;
     private final DatasetRepository datasetRepository;
     private final AnnotationService annotationService;
     private final Searcher searcher;
     private final Storage<JsonNode, JsonNode> primaryStorage;
     private final Storage<Object, JsonNode> secondaryStorage;
-
-    public Dataset getDatasetById(int datasetId) {
-        return datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
-    }
 
     public DatasetListResponseDto getAllDatasets() {
         List<DatasetResponseDto> datasets = datasetRepository.findAll().stream()
@@ -112,29 +101,19 @@ public class DatasetService {
         }
     }
 
-    public JsonNode getDatasetPage(int datasetId, Pageable pageable) {
+    @Transactional(readOnly = true)
+    public void getDatasetPage(int datasetId, Pageable pageable, OutputStream out) {
         Dataset dataset = getDatasetById(datasetId);
         StorageInfo storageInfo = getStorageInfo(dataset);
         Storage<?, JsonNode> storage = getStorage(storageInfo);
 
-        List<JsonNode> rows;
-        try (Stream<JsonNode> pageStream = storage.getPage(storageInfo, pageable)) {
-            rows = pageStream.toList();
-        }
-        // TODO: rewrite for streams?
-        Map<Long, List<Annotation>> annotationsByRowNum = annotationService.getAnnotations(datasetId, pageable);
-        enrichRowsWithAnnotations(rows, annotationsByRowNum);
-        return objectMapper.createArrayNode().addAll(rows);
-    }
-
-    private void enrichRowsWithAnnotations(Iterable<JsonNode> rows, Map<Long, List<Annotation>> annotationsByRowNum) {
-        for (JsonNode node : rows) {
-            ObjectNode row = (ObjectNode) node;
-            long rowNum = row.get("num").asLong();
-            List<LabelResponseDto> labelsForRow = annotationsByRowNum.getOrDefault(rowNum, List.of()).stream()
-                    .map(a -> mapper.map(a.getLabel(), LabelResponseDto.class))
-                    .toList();
-            row.set("labels", objectMapper.valueToTree(labelsForRow));
+        try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
+             Stream<JsonNode> dataStream = storage.getPage(storageInfo, pageable)) {
+            AnnotationEnricher enricher = EnricherFactory.getJsonEnricher();
+            var offsetAdder = EnricherFactory.getJsonRowNumOffsetAdder();
+            Stream<JsonNode> transformedDataStream = dataStream.map(
+                    node -> offsetAdder.apply(node, pageable.getOffset()));
+            enricher.enrichAndWrite(transformedDataStream, annotationStream, out);
         }
     }
 
@@ -155,6 +134,17 @@ public class DatasetService {
         datasetRepository.deleteById(datasetId);
     }
 
+    @Transactional(readOnly = true)
+    public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream out) {
+        StorageInfo storageInfo = getStorageInfo(dataset);
+        Storage<?, JsonNode> storage = getStorage(storageInfo);
+        try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
+             Stream<JsonNode> dataStream = storage.getAll(storageInfo)) {
+            AnnotationEnricher enricher = EnricherFactory.getEnricher(fileExtension);
+            enricher.enrichAndWrite(dataStream, annotationStream, out);
+        }
+    }
+
     public String search(int datasetId, String query, Pageable pageable) {
         Dataset dataset = getDatasetById(datasetId);
         String datasetName = dataset.getName();
@@ -164,21 +154,9 @@ public class DatasetService {
         return searcher.search(datasetName, query, pageable).toString();
     }
 
-    @Transactional(readOnly = true)
-    public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream out) {
-        StorageInfo storageInfo = getStorageInfo(dataset);
-        try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
-             Stream<JsonNode> dataStream = getStorage(storageInfo).getAll(storageInfo)) {
-            AnnotationEnricher enricher = EnricherFactory.getEnricher(fileExtension);
-            enricher.enrichAndWrite(dataStream, annotationStream, out);
-        }
-    }
-
-    private Storage<?, JsonNode> getStorage(StorageInfo storageInfo) {
-        return switch (storageInfo.getMode()) {
-            case PRIMARY -> primaryStorage;
-            case SECONDARY -> secondaryStorage;
-        };
+    public Dataset getDatasetById(int datasetId) {
+        return datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
     }
 
     private StorageInfo getStorageInfo(Dataset dataset) {
@@ -186,5 +164,12 @@ public class DatasetService {
                 .filter(StorageInfo::isStorageReady)
                 .min(Comparator.comparing(StorageInfo::getMode))
                 .orElseThrow(() -> new IllegalStateException("No storage available for dataset " + dataset.getId()));
+    }
+
+    private Storage<?, JsonNode> getStorage(StorageInfo storageInfo) {
+        return switch (storageInfo.getMode()) {
+            case PRIMARY -> primaryStorage;
+            case SECONDARY -> secondaryStorage;
+        };
     }
 }

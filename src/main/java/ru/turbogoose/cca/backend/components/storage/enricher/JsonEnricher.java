@@ -63,4 +63,11 @@ public class JsonEnricher {
             throw new RuntimeException(exc);
         }
     }
+
+    public static JsonNode addOffsetForRowNum(JsonNode node, long offset) {
+        ObjectNode obj = (ObjectNode) node;
+        long num = obj.get("num").asLong();
+        obj.put("num", num + offset);
+        return obj;
+    }
 }
