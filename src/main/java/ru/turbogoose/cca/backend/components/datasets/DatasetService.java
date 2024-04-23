@@ -109,11 +109,8 @@ public class DatasetService {
 
         try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
              Stream<JsonNode> dataStream = storage.getPage(storageInfo, pageable)) {
-            AnnotationEnricher enricher = EnricherFactory.getJsonEnricher();
-            var offsetAdder = EnricherFactory.getJsonRowNumOffsetAdder();
-            Stream<JsonNode> transformedDataStream = dataStream.map(
-                    node -> offsetAdder.apply(node, pageable.getOffset()));
-            enricher.enrichAndWrite(transformedDataStream, annotationStream, out);
+            AnnotationEnricher enricher = EnricherFactory.getJsonEnricher(pageable.getOffset());
+            enricher.enrichAndWrite(dataStream, annotationStream, out);
         }
     }
 

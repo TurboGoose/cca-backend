@@ -13,13 +13,16 @@ import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.stream.Stream;
 
-public class JsonEnricher {
-    public static final ObjectMapper objectMapper = new ObjectMapper();
+public class JsonEnricher implements AnnotationEnricher {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private final long offset;
 
-    private JsonEnricher() {
+    public JsonEnricher(long offset) {
+        this.offset = offset;
     }
 
-    public static void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
+    @Override
+    public void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
         Iterator<JsonNode> dataIterator = dataStream.iterator();
         if (!dataIterator.hasNext()) {
             throw new IllegalStateException("Data iterator has no elements");
@@ -32,7 +35,7 @@ public class JsonEnricher {
             generator.setCodec(objectMapper);
 
             Iterable<Annotation> annotationIterable = annotationStream::iterator;
-            long dataRowNum = 0L;
+            long dataRowNum = offset;
             ObjectNode dataObject = null;
             for (Annotation annotation : annotationIterable) {
                 Long targetRowNum = annotation.getId().getRowNum();
@@ -63,12 +66,5 @@ public class JsonEnricher {
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
-    }
-
-    public static JsonNode addOffsetForRowNum(JsonNode node, long offset) {
-        ObjectNode obj = (ObjectNode) node;
-        long num = obj.get("num").asLong();
-        obj.put("num", num + offset);
-        return obj;
     }
 }

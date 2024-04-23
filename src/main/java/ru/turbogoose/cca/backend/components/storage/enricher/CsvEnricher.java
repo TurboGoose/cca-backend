@@ -15,17 +15,21 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Stream;
 
-public class CsvEnricher {
-    private CsvEnricher() {
+public class CsvEnricher implements AnnotationEnricher{
+    private final long offset;
+
+    public CsvEnricher(long offset) {
+        this.offset = offset;
     }
 
-    public static void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
+    @Override
+    public void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
         Iterator<JsonNode> dataIterator = dataStream.iterator();
         if (!dataIterator.hasNext()) {
             throw new IllegalStateException("Data iterator has no elements");
         }
 
-        long dataRowNum = 1L;
+        long dataRowNum = offset;
         JsonNode node = dataIterator.next();
         CSVFormat csvFormat = composeFormat(node);
         List<String> headers = List.of(csvFormat.getHeader());
@@ -57,7 +61,7 @@ public class CsvEnricher {
         }
     }
 
-    private static CSVFormat composeFormat(JsonNode node) {
+    private CSVFormat composeFormat(JsonNode node) {
         List<String> headers = new LinkedList<>();
         node.fieldNames().forEachRemaining(headers::add);
         headers.add("labels");
@@ -66,11 +70,11 @@ public class CsvEnricher {
                 .build();
     }
 
-    private static void printRecordWithoutLabels(JsonNode node, List<String> headers, CSVPrinter printer) throws IOException {
+    private void printRecordWithoutLabels(JsonNode node, List<String> headers, CSVPrinter printer) throws IOException {
         printRecord(node, List.of(), headers, printer);
     }
 
-    private static void printRecord(JsonNode node, List<String> labels, List<String> headers, CSVPrinter printer) throws IOException {
+    private void printRecord(JsonNode node, List<String> labels, List<String> headers, CSVPrinter printer) throws IOException {
         ObjectNode obj = (ObjectNode) node;
         obj.put("labels", String.join(";", labels));
         printer.printRecord(headers.stream().map(h -> obj.get(h).asText()));
