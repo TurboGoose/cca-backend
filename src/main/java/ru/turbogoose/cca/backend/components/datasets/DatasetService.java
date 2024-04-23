@@ -54,19 +54,24 @@ public class DatasetService {
         String datasetName = removeExtension(file.getOriginalFilename());
 
         try {
-            Dataset dataset = Dataset.builder()
-                    .name(datasetName)
-                    .size(file.getSize())
-                    .created(LocalDateTime.now())
-                    .build();
-            datasetRepository.saveAndFlush(dataset); // integrity violation on duplicate
-            log.debug("[{}] saved to db", datasetName);
+            Dataset dataset = new Dataset();
+            dataset.setName(datasetName);
+            dataset.setSize(file.getSize());
+            dataset.setCreated(LocalDateTime.now());
 
-            StorageInfo secondaryInfo = new StorageInfo(secondaryStorage.create(), StorageMode.SECONDARY);
-            dataset.addStorage(secondaryInfo);
+            datasetRepository.saveAndFlush(dataset); // integrity violation on duplicate
+            log.debug("[{}] dataset metadata saved into db", datasetName);
+
+
+            dataset.addStorage(new StorageInfo(secondaryStorage.create(), StorageMode.SECONDARY));
+            datasetRepository.save(dataset);
+            StorageInfo secondaryInfo = dataset.getStorage(StorageMode.SECONDARY)
+                    .orElseThrow(() -> new IllegalStateException("No secondary storage available"));
+            log.debug("[{}] secondary storage created", datasetName);
 
             secondaryStorage.fill(secondaryInfo, file.getInputStream());
-            log.debug("[{}] saved to secondary storage", dataset.getId());
+            datasetRepository.save(dataset);
+            log.debug("[{}] data saved into secondary storage", dataset.getId());
 
             new Thread(() -> migrateSecondaryStorageToPrimary(dataset)).start(); // TODO: add thread executor
             return mapper.map(dataset, DatasetResponseDto.class);

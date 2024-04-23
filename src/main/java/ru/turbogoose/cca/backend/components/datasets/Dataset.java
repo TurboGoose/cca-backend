@@ -7,13 +7,12 @@ import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 @Data
-@Builder
 @NoArgsConstructor
-@AllArgsConstructor
 @Entity
 @Table(name="datasets")
 public class Dataset {
@@ -32,27 +31,28 @@ public class Dataset {
     @OneToMany(mappedBy = "dataset", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private List<Label> labels;
+    private List<Label> labels = new ArrayList<>();
 
-    @OneToMany(mappedBy = "dataset", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "dataset", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private List<StorageInfo> storages;
+    private List<StorageInfo> storages = new ArrayList<>();
 
     public void addStorage(StorageInfo storageInfo) {
         if (storageInfo != null) {
-            storages.add(storageInfo);
+            List<StorageInfo> st = getStorages();
+            st.add(storageInfo);
             storageInfo.setDataset(this);
         }
     }
 
     public Optional<StorageInfo> getStorage(StorageMode mode) {
-        return storages.stream().filter(s -> s.getMode() == mode).findFirst();
+        return getStorages().stream().filter(s -> s.getMode() == mode).findFirst();
     }
 
     public void removeStorage(StorageInfo storageInfo) {
         if (storageInfo != null) {
-            storages.remove(storageInfo);
+            getStorages().remove(storageInfo);
             storageInfo.setDataset(null);
         }
     }

@@ -99,6 +99,6 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     }
 
     private Path getStoragePath(InternalStorageInfo storageInfo) {
-        return Path.of(rootFolderPath.toString(), storageInfo.getStorageId());
+        return Path.of(storageInfo.getStorageId());
     }
 }
