@@ -59,6 +59,7 @@ public class JsonEnricher {
             generator.writeTree(dataObject);
 
             generator.writeEndArray();
+            generator.flush();
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }

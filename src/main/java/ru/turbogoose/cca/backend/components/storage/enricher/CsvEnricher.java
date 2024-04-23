@@ -51,6 +51,7 @@ public class CsvEnricher {
             while (dataIterator.hasNext()) {
                 printRecordWithoutLabels(dataIterator.next(), headers, csvPrinter);
             }
+            csvPrinter.flush();
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
