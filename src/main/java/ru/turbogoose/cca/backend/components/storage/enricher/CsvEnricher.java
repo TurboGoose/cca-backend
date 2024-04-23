@@ -29,7 +29,7 @@ public class CsvEnricher implements AnnotationEnricher{
             throw new IllegalStateException("Data iterator has no elements");
         }
 
-        long dataRowNum = offset;
+        long dataRowNum = offset + 1;
         JsonNode node = dataIterator.next();
         CSVFormat csvFormat = composeFormat(node);
         List<String> headers = List.of(csvFormat.getHeader());

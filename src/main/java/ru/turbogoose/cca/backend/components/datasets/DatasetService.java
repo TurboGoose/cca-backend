@@ -107,7 +107,7 @@ public class DatasetService {
         StorageInfo storageInfo = getStorageInfo(dataset);
         Storage<?, JsonNode> storage = getStorage(storageInfo);
 
-        try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
+        try (Stream<Annotation> annotationStream = annotationService.getAnnotationsPage(datasetId, pageable);
              Stream<JsonNode> dataStream = storage.getPage(storageInfo, pageable)) {
             AnnotationEnricher enricher = EnricherFactory.getJsonEnricher(pageable.getOffset());
             enricher.enrichAndWrite(dataStream, annotationStream, out);

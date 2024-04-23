@@ -19,10 +19,10 @@ public class CsvUtil {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static Stream<JsonNode> readCsvPageAsJson(Path storagePath, Pageable pageable) {
-        long from = pageable.getOffset();
+        long offset = pageable.getOffset();
         int size = pageable.getPageSize();
         return readCsv(storagePath)
-                .skip(from - 1)
+                .skip(offset)
                 .limit(size)
                 .map(CsvUtil::csvLineToJsonNode);
     }

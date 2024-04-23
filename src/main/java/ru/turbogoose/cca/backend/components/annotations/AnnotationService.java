@@ -2,6 +2,7 @@ package ru.turbogoose.cca.backend.components.annotations;
 
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
@@ -38,6 +39,12 @@ public class AnnotationService {
         }
         annotationRepository.saveAll(annotationsToAdd);
         annotationRepository.deleteAllByIdInBatch(annotationIdsToDelete);
+    }
+
+    public Stream<Annotation> getAnnotationsPage(int datasetId, Pageable pageable) {
+        long from = pageable.getOffset();
+        long to = from + pageable.getPageSize();
+        return annotationRepository.findAnnotationsByDatasetIdAndRowNumBetween(datasetId, from, to);
     }
 
     public Stream<Annotation> getAllAnnotations(int datasetId) {
