@@ -20,13 +20,15 @@ import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
 import ru.turbogoose.cca.backend.components.storage.enricher.AnnotationEnricher;
 import ru.turbogoose.cca.backend.components.storage.enricher.EnricherFactory;
+import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
+import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
@@ -68,23 +70,40 @@ public class DatasetService {
                     .size(file.getSize())
                     .created(LocalDateTime.now())
                     .build();
-            datasetRepository.save(dataset); // integrity violation on duplicate
+            datasetRepository.saveAndFlush(dataset); // integrity violation on duplicate
             log.debug("[{}] saved to db", datasetName);
-            secondaryStorage.fill(datasetName, file.getInputStream());
-            log.debug("[{}] saved to secondary storage", datasetName);
-            new Thread(() -> { // TODO: add thread executor
-                try (Stream<JsonNode> dataStream = secondaryStorage.getAll(datasetName)) {
-                    primaryStorage.create(datasetName);
-                    primaryStorage.fill(datasetName, dataStream);
-                    log.debug("[{}] saved to primary storage", datasetName);
-                    secondaryStorage.delete(datasetName);
-                    log.debug("[{}] deleted from secondary storage", datasetName);
-                }
-            }).start();
+
+            StorageInfo secondaryInfo = new StorageInfo(secondaryStorage.create(), StorageMode.SECONDARY);
+            dataset.addStorage(secondaryInfo);
+
+            secondaryStorage.fill(secondaryInfo, file.getInputStream());
+            log.debug("[{}] saved to secondary storage", dataset.getId());
+
+            new Thread(() -> migrateSecondaryStorageToPrimary(dataset)).start(); // TODO: add thread executor
             return mapper.map(dataset, DatasetResponseDto.class);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
+    }
+
+    private void migrateSecondaryStorageToPrimary(Dataset dataset) {
+        StorageInfo secondaryInfo = dataset.getStorage(StorageMode.SECONDARY)
+                .orElseThrow(() -> new IllegalStateException("Failed to migrate: no secondary storage available"));
+
+        if (!secondaryInfo.isStorageReady()) {
+            throw new IllegalStateException("Failed to migrate: secondary storage not ready yet");
+        }
+
+        try (Stream<JsonNode> dataStream = secondaryStorage.getAll(secondaryInfo)) {
+            StorageInfo primaryInfo = new StorageInfo(primaryStorage.create(), StorageMode.PRIMARY);
+            dataset.addStorage(primaryInfo);
+
+            primaryStorage.fill(primaryInfo, dataStream);
+            log.debug("[{}] saved to primary storage", dataset.getId());
+        }
+        secondaryStorage.delete(secondaryInfo);
+        dataset.removeStorage(secondaryInfo);
+        log.debug("[{}] deleted from secondary storage", dataset.getId());
     }
 
     private void validateDatasetFileExtension(String filename) {
@@ -94,9 +113,12 @@ public class DatasetService {
     }
 
     public JsonNode getDatasetPage(int datasetId, Pageable pageable) {
-        String datasetName = getDatasetById(datasetId).getName();
+        Dataset dataset = getDatasetById(datasetId);
+        StorageInfo storageInfo = getStorageInfo(dataset);
+        Storage<?, JsonNode> storage = getStorage(storageInfo);
+
         List<JsonNode> rows;
-        try (Stream<JsonNode> pageStream = getStorage(datasetName).getPage(datasetName, pageable)) {
+        try (Stream<JsonNode> pageStream = storage.getPage(storageInfo, pageable)) {
             rows = pageStream.toList();
         }
         // TODO: rewrite for streams?
@@ -122,18 +144,15 @@ public class DatasetService {
         dataset.setName(newName);
         dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
-        // TODO: add cols storage and storage_id in db and change only dataset name
         return mapper.map(dataset, DatasetResponseDto.class);
     }
 
     @Transactional
     public void deleteDataset(int datasetId) {
-        Optional<Dataset> datasetOpt = datasetRepository.findById(datasetId);
-        if (datasetOpt.isPresent()) {
-            datasetRepository.deleteById(datasetId);
-            String datasetName = datasetOpt.get().getName();
-            getStorage(datasetName).delete(datasetName);
-        }
+        Dataset dataset = getDatasetById(datasetId);
+        StorageInfo storageInfo = getStorageInfo(dataset);
+        getStorage(storageInfo).delete(storageInfo);
+        datasetRepository.deleteById(datasetId);
     }
 
     public String search(int datasetId, String query, Pageable pageable) {
@@ -147,21 +166,25 @@ public class DatasetService {
 
     @Transactional(readOnly = true)
     public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream out) {
-        String datasetName = dataset.getName();
+        StorageInfo storageInfo = getStorageInfo(dataset);
         try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
-             Stream<JsonNode> dataStream = getStorage(datasetName).getAll(datasetName)) {
+             Stream<JsonNode> dataStream = getStorage(storageInfo).getAll(storageInfo)) {
             AnnotationEnricher enricher = EnricherFactory.getEnricher(fileExtension);
             enricher.enrichAndWrite(dataStream, annotationStream, out);
         }
     }
 
-    private Storage<?, JsonNode> getStorage(String storageName) {
-        if (primaryStorage.isAvailable(storageName)) {
-            return primaryStorage;
-        }
-        if (secondaryStorage.isAvailable(storageName)) {
-            return secondaryStorage;
-        }
-        throw new IllegalStateException("Storage %s not available yet".formatted(storageName));
+    private Storage<?, JsonNode> getStorage(StorageInfo storageInfo) {
+        return switch (storageInfo.getMode()) {
+            case PRIMARY -> primaryStorage;
+            case SECONDARY -> secondaryStorage;
+        };
+    }
+
+    private StorageInfo getStorageInfo(Dataset dataset) {
+        return dataset.getStorages().stream()
+                .filter(StorageInfo::isStorageReady)
+                .min(Comparator.comparing(StorageInfo::getMode))
+                .orElseThrow(() -> new IllegalStateException("No storage available for dataset " + dataset.getId()));
     }
 }

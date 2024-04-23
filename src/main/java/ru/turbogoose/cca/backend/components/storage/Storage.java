@@ -1,20 +1,20 @@
 package ru.turbogoose.cca.backend.components.storage;
 
 import org.springframework.data.domain.Pageable;
+import ru.turbogoose.cca.backend.components.storage.info.InternalStorageInfo;
 
 import java.io.InputStream;
 import java.util.stream.Stream;
 
 public interface Storage<I, O> {
-    String create(String storageName);
-    default void fill(String storageName, Stream<I> in) {
+    InternalStorageInfo create();
+    default void fill(InternalStorageInfo info, Stream<I> in) {
         throw new UnsupportedOperationException();
     }
-    default void fill(String storageName, InputStream in) {
+    default void fill(InternalStorageInfo info, InputStream in) {
         throw new UnsupportedOperationException();
     }
-    Stream<O> getAll(String storageName);
-    Stream<O> getPage(String storageName, Pageable pageable);
-    boolean isAvailable(String storageName);
-    void delete(String storageName);
+    Stream<O> getAll(InternalStorageInfo info);
+    Stream<O> getPage(InternalStorageInfo info, Pageable pageable);
+    void delete(InternalStorageInfo info);
 }

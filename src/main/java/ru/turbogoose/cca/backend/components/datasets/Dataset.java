@@ -1,14 +1,14 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import ru.turbogoose.cca.backend.components.labels.Label;
+import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
+import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Data
 @Builder
@@ -30,5 +30,30 @@ public class Dataset {
     private LocalDateTime lastUpdated;
 
     @OneToMany(mappedBy = "dataset", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<Label> labels;
+
+    @OneToMany(mappedBy = "dataset", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<StorageInfo> storages;
+
+    public void addStorage(StorageInfo storageInfo) {
+        if (storageInfo != null) {
+            storages.add(storageInfo);
+            storageInfo.setDataset(this);
+        }
+    }
+
+    public Optional<StorageInfo> getStorage(StorageMode mode) {
+        return storages.stream().filter(s -> s.getMode() == mode).findFirst();
+    }
+
+    public void removeStorage(StorageInfo storageInfo) {
+        if (storageInfo != null) {
+            storages.remove(storageInfo);
+            storageInfo.setDataset(null);
+        }
+    }
 }

@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import ru.turbogoose.cca.backend.common.util.CsvUtil;
+import ru.turbogoose.cca.backend.components.storage.info.InternalStorageInfo;
+import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -12,14 +14,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 @Service
 public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     private final Path rootFolderPath;
-    private final Map<String, Path> pathByStorageName = new ConcurrentHashMap<>();
 
     public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder:#{null}}") String rootFolderPath) {
         try {
@@ -32,23 +31,28 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     }
 
     @Override
-    public String create(String storageName) {
+    public InternalStorageInfo create() {
         try {
-            Path path = Files.createTempFile(rootFolderPath, storageName, null);
-            pathByStorageName.put(storageName, path);
-            return path.toString();
+            Path path = Files.createTempFile(rootFolderPath, null, null);
+            return new InternalStorageInfo(path.toString(), StorageStatus.CREATED);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     @Override
-    public void fill(String storageName, InputStream in) {
-        Path storagePath = getStoragePathAndCreateIfNotExists(storageName);
+    public void fill(InternalStorageInfo storageInfo, InputStream in) {
+        if (storageInfo.isStorageReady()) {
+            throw new IllegalStateException("Storage already filled");
+        }
+        Path storagePath = getStoragePath(storageInfo);
         try (in; OutputStream out = new FileOutputStream(storagePath.toFile())) {
+            storageInfo.setStatus(StorageStatus.LOADING);
             in.transferTo(out);
+            storageInfo.setStatus(StorageStatus.READY);
         } catch (IOException exc) {
             deleteStorage(storagePath);
+            storageInfo.setStatus(StorageStatus.ERROR);
             throw new RuntimeException(exc);
         }
     }
@@ -57,8 +61,11 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
      * @apiNote Returned stream must be explicitly closed
      */
     @Override
-    public Stream<JsonNode> getAll(String storageName) {
-        Path storagePath = getStoragePathOrThrow(storageName);
+    public Stream<JsonNode> getAll(InternalStorageInfo storageInfo) {
+        if (!storageInfo.isStorageReady()) {
+            throw new IllegalStateException("Storage not ready yet");
+        }
+        Path storagePath = getStoragePath(storageInfo);
         return CsvUtil.readCsvAsJson(storagePath);
     }
 
@@ -66,19 +73,20 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
      * @apiNote Returned stream must be explicitly closed
      */
     @Override
-    public Stream<JsonNode> getPage(String storageName, Pageable pageable) {
-        Path storagePath = getStoragePathOrThrow(storageName);
+    public Stream<JsonNode> getPage(InternalStorageInfo storageInfo, Pageable pageable) {
+        if (!storageInfo.isStorageReady()) {
+            throw new IllegalStateException("Storage not ready yet");
+        }
+        Path storagePath = getStoragePath(storageInfo);
         return CsvUtil.readCsvPageAsJson(storagePath, pageable);
     }
 
     @Override
-    public boolean isAvailable(String storageName) {
-        return pathByStorageName.containsKey(storageName);
-    }
-
-    @Override
-    public void delete(String storageName) {
-        Path storagePath = getStoragePathOrThrow(storageName);
+    public void delete(InternalStorageInfo storageInfo) {
+        if (!storageInfo.isStorageReady()) {
+            throw new IllegalStateException("Storage not ready yet");
+        }
+        Path storagePath = getStoragePath(storageInfo);
         deleteStorage(storagePath);
     }
 
@@ -90,17 +98,7 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
         }
     }
 
-    private Path getStoragePathAndCreateIfNotExists(String storageName) {
-        if (!pathByStorageName.containsKey(storageName)) {
-            create(storageName);
-        }
-        return pathByStorageName.get(storageName);
-    }
-
-    private Path getStoragePathOrThrow(String storageName) {
-        if (!pathByStorageName.containsKey(storageName)) {
-            throw new IllegalArgumentException("FS storage [%s] not exists".formatted(storageName));
-        }
-        return pathByStorageName.get(storageName);
+    private Path getStoragePath(InternalStorageInfo storageInfo) {
+        return Path.of(rootFolderPath.toString(), storageInfo.getStorageId());
     }
 }
