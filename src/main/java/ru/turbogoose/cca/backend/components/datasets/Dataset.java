@@ -1,7 +1,10 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import ru.turbogoose.cca.backend.components.labels.Label;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
@@ -40,8 +43,7 @@ public class Dataset {
 
     public void addStorage(StorageInfo storageInfo) {
         if (storageInfo != null) {
-            List<StorageInfo> st = getStorages();
-            st.add(storageInfo);
+            getStorages().add(storageInfo);
             storageInfo.setDataset(this);
         }
     }
