@@ -3,13 +3,14 @@ package ru.turbogoose.cca.backend.components.storage.elastic;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._helpers.bulk.BulkIngester;
 import co.elastic.clients.elasticsearch._helpers.bulk.BulkListener;
-import co.elastic.clients.elasticsearch.core.BulkRequest;
-import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch._types.FieldSort;
+import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.CreateResponse;
-import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,7 @@ import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -30,6 +32,7 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 @Slf4j
 public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNode> {
+    public static final ObjectMapper objectMapper = new ObjectMapper();
     private static final String TIE_BREAKER_ID = "tbid";
     @Value("${elasticsearch.query.timeout:1m}")
     private String queryTimeout;
@@ -63,36 +66,112 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                 .listener(listener)
         );
 
+        long rowNum = 1;
         try (ingester) {
             Iterator<JsonNode> dataIterator = in.iterator();
             while (dataIterator.hasNext()) {
-
                 ObjectNode node = (ObjectNode) dataIterator.next();
-                long rowNum = node.get("num").asLong();
-                node.remove("num");
+
                 node.put(TIE_BREAKER_ID, rowNum);
+                String rowId = Long.toString(rowNum);
 
                 ingester.add(op -> op
                                 .index(idx -> idx
                                         .index(info.getStorageId())
-                                        .id(rowNum + "")
+                                        .id(rowId)
                                         .document(node)
                                 ),
                         rowNum
                 );
+                rowNum++;
             }
         }
     }
 
-
     @Override
     public Stream<JsonNode> getAll(InternalStorageInfo info) {
-        return null;
+        try {
+            List<Hit<ObjectNode>> initHits = esClient.search(g1 -> g1
+                            .index(info.getStorageId())
+                            .size(downloadBatchSize)
+                            .query(q1 -> q1
+                                    .matchAll(m1 -> m1))
+                            .sort(so1 -> so1
+                                    .field(FieldSort.of(f1 -> f1
+                                            .field(TIE_BREAKER_ID)
+                                            .order(SortOrder.Asc)))),
+                    ObjectNode.class
+            ).hits().hits();
+            return Stream.iterate(initHits,
+                            hits -> hits.size() == downloadBatchSize,
+                            hits -> nextPage(hits, info))
+                    .map(this::convertHits)
+                    .flatMap(List::stream);
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    private List<Hit<ObjectNode>> nextPage(List<Hit<ObjectNode>> hits, InternalStorageInfo info) {
+        try {
+            long searchAfter = hits.getLast().sort().getFirst().longValue();
+            return esClient.search(g1 -> g1
+                            .index(info.getStorageId())
+                            .size(downloadBatchSize)
+                            .query(q1 -> q1
+                                    .matchAll(m1 -> m1))
+                            .sort(so1 -> so1
+                                    .field(FieldSort.of(f1 -> f1
+                                            .field(TIE_BREAKER_ID)
+                                            .order(SortOrder.Asc))))
+                            .searchAfter(searchAfter),
+                    ObjectNode.class
+            ).hits().hits();
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    private List<ObjectNode> convertHits(List<Hit<ObjectNode>> hits) {
+        return hits.stream()
+                .filter(hit -> hit.source() != null)
+                .map(hit -> {
+                    ObjectNode source = hit.source();
+                    source.remove(TIE_BREAKER_ID);
+                    return source;
+                }).toList();
     }
 
     @Override
     public Stream<JsonNode> getPage(InternalStorageInfo info, Pageable pageable) {
-        return null;
+        try {
+            int from = (int) pageable.getOffset();
+            int size = pageable.getPageSize();
+            SearchResponse<ObjectNode> response = esClient.search(g -> g
+                            .index(info.getStorageId())
+                            .from(from) // FIXME: int instead of long!!
+                            .size(size)
+                            .query(q -> q
+                                    .matchAll(m -> m)),
+                    ObjectNode.class
+            );
+            log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
+            return extractHitsAndComposeResult(response);
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    private Stream<JsonNode> extractHitsAndComposeResult(SearchResponse<ObjectNode> response) {
+        List<JsonNode> result = new LinkedList<>();
+        for (Hit<ObjectNode> hit : response.hits().hits()) {
+            ObjectNode source = hit.source();
+            if (source != null) {
+                source.remove(TIE_BREAKER_ID);
+                result.add(source);
+            }
+        }
+        return result.stream();
     }
 
     @Override
@@ -165,118 +244,6 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 //        resultNode.set("rows", resultArray);
 //        return resultNode;
 //    }
-//
-//    @Override
-//    public void fill(String storageName, Stream<JsonNode> in) {
-//        BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
-//        int counter = 0;
-//        for (JsonNode node : records) {
-//            int recordNum = ++counter;
-//            ObjectNode record = (ObjectNode) node;
-//            record.put(TIE_BREAKER_ID, recordNum);
-//            bulkBuilder.operations(op -> op
-//                    .index(idx -> idx
-//                            .index(indexName)
-//                            .id(recordNum + "")
-//                            .document(record)));
-//        }
-//        try {
-//            BulkResponse result = esClient.bulk(bulkBuilder.build());
-//            if (result.errors()) {
-//                log.error("Bulk had errors"); // TODO: rewrite for ingester
-//                for (BulkResponseItem item : result.items()) {
-//                    if (item.error() != null) {
-//                        log.error(item.error().reason());
-//                    }
-//                }
-//            }
-//            availabilityByIndexName.put(indexName, true);
-//        } catch (IOException exc) {
-//            throw new RuntimeException(exc);
-//        }
-//    }
-//
-//    @Override
-//    public Stream<JsonNode> getPage(String indexName, Pageable pageable) {
-//        try {
-//            int from = (int) pageable.getOffset();
-//            int size = pageable.getPageSize();
-//            SearchResponse<ObjectNode> response = esClient.search(g -> g
-//                            .index(indexName)
-//                            .from(from)
-//                            .size(size)
-//                            .query(q -> q
-//                                    .matchAll(m -> m)),
-//                    ObjectNode.class
-//            );
-//            log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
-//            return extractHitsAndComposeResult(response);
-//        } catch (IOException exc) {
-//            throw new RuntimeException(exc);
-//        }
-//    }
-//
-//    @Override
-//    public Stream<JsonNode> getAll(String storageName) {
-//        try {
-//            ArrayNode table = objectMapper.createArrayNode();
-//            List<Hit<ObjectNode>> hits = esClient.search(g1 -> g1
-//                            .index(indexName)
-//                            .size(downloadBatchSize)
-//                            .query(q1 -> q1
-//                                    .matchAll(m1 -> m1))
-//                            .sort(so1 -> so1
-//                                    .field(FieldSort.of(f1 -> f1
-//                                            .field(TIE_BREAKER_ID)
-//                                            .order(SortOrder.Asc)))),
-//                    ObjectNode.class
-//            ).hits().hits();
-//             TODO: add move verbose logging
-//            while (true) {
-//                for (Hit<ObjectNode> hit : hits) {
-//                    ObjectNode source = hit.source();
-//                    if (source != null) {
-//                        source.remove(TIE_BREAKER_ID);
-//                        table.add(source);
-//                    }
-//                }
-//                if (hits.size() < downloadBatchSize) {
-//                    break;
-//                }
-//                long searchAfter = hits.getLast().sort().getFirst().longValue();
-//                hits = esClient.search(g1 -> g1
-//                                .index(indexName)
-//                                .size(downloadBatchSize)
-//                                .query(q1 -> q1
-//                                        .matchAll(m1 -> m1))
-//                                .sort(so1 -> so1
-//                                        .field(FieldSort.of(f1 -> f1
-//                                                .field(TIE_BREAKER_ID)
-//                                                .order(SortOrder.Asc))))
-//                                .searchAfter(searchAfter),
-//                        ObjectNode.class
-//                ).hits().hits();
-//            }
-//            return table;
-//        } catch (IOException exc) {
-//            throw new RuntimeException(exc);
-//        }
-//        return null;
-//    }
-//
-//    private ArrayNode extractHitsAndComposeResult(SearchResponse<ObjectNode> response) {
-//        ArrayNode resultArray = objectMapper.createArrayNode();
-//        for (Hit<ObjectNode> hit : response.hits().hits()) {
-//            ObjectNode source = hit.source();
-//            if (source != null) {
-//                source.remove(TIE_BREAKER_ID);
-//                ObjectNode data = objectMapper.createObjectNode();
-//                data.set("source", source);
-//                data.put("num", Long.valueOf(hit.id()));
-//                resultArray.add(data);
-//            }
-//        }
-//        return resultArray;
-//    }
+
 }
 
