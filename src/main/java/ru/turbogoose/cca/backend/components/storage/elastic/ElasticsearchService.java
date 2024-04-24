@@ -7,9 +7,13 @@ import co.elastic.clients.elasticsearch._types.FieldSort;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.CreateResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.HighlighterEncoder;
+import co.elastic.clients.elasticsearch.core.search.HighlighterType;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.elasticsearch.core.search.TotalHits;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,11 +44,6 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     private int downloadBatchSize;
 
     private final ElasticsearchClient esClient;
-
-    @Override
-    public JsonNode search(String indexName, String query, Pageable pageable) {
-        return null;
-    }
 
     @Override
     public InternalStorageInfo create() {
@@ -184,66 +183,62 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         }
     }
 
-//    @Override
-//    public JsonNode search(String indexName, String query, Pageable pageable) {
-//        try {
-//            int from = (int) pageable.getOffset();
-//            int size = pageable.getPageSize();
-//            SearchResponse<ObjectNode> response = esClient.search(g -> g
-//                            .index(indexName)
-//                            .from(from)
-//                            .size(size)
-//                            .timeout(queryTimeout)
-//                            .query(q -> q
-//                                    .simpleQueryString(sqs -> sqs
-//                                            .query(query)))
-//                            .highlight(h -> h
-//                                    .encoder(HighlighterEncoder.Html)
-//                                    .numberOfFragments(0)
-//                                    .preTags("<em class=\"hlt\">")
-//                                    .postTags("</em>")
-//                                    .type(HighlighterType.Plain)
-//                                    .fields(
-//                                            "*", hf -> hf)),
-//                    ObjectNode.class
-//            );
-//            return extractHitsWithHighlightsAndComposeResult(response);
-//        } catch (IOException exc) {
-//            throw new RuntimeException(exc);
-//        }
-//    }
-//
-//
-//    private JsonNode extractHitsWithHighlightsAndComposeResult(SearchResponse<ObjectNode> response) {
-//        ObjectNode resultNode = objectMapper.createObjectNode();
-//        resultNode.put("timeout", response.timedOut());
-//        TotalHits total = response.hits().total();
-//        if (total != null) {
-//            resultNode.put("total", total.value());
-//        }
-//
-//        ArrayNode resultArray = objectMapper.createArrayNode();
-//        for (Hit<ObjectNode> hit : response.hits().hits()) {
-//            ObjectNode source = hit.source();
-//            if (source != null) {
-//                source.remove(TIE_BREAKER_ID);
-//                ObjectNode dataNode = objectMapper.createObjectNode();
-//                dataNode.put("num", Long.valueOf(hit.id()));
-//
-//                for (String fieldName : hit.highlight().keySet()) {
-//                    List<String> highlights = hit.highlight().get(fieldName);
-//                    if (!highlights.isEmpty() && source.has(fieldName)) {
-//                        source.put(fieldName, highlights.getFirst());
-//                    }
-//                }
-//                dataNode.set("source", source);
-//
-//                resultArray.add(dataNode);
-//            }
-//        }
-//        resultNode.set("rows", resultArray);
-//        return resultNode;
-//    }
+    @Override
+    public JsonNode search(InternalStorageInfo info, String query, Pageable pageable) {
+        try {
+            int from = (int) pageable.getOffset();
+            int size = pageable.getPageSize();
+            SearchResponse<ObjectNode> response = esClient.search(g -> g
+                            .index(info.getStorageId())
+                            .from(from)
+                            .size(size)
+                            .timeout(queryTimeout)
+                            .query(q -> q
+                                    .simpleQueryString(sqs -> sqs
+                                            .query(query)))
+                            .highlight(h -> h
+                                    .encoder(HighlighterEncoder.Html)
+                                    .numberOfFragments(0)
+                                    .preTags("<em class=\"hlt\">")
+                                    .postTags("</em>")
+                                    .type(HighlighterType.Plain)
+                                    .fields(
+                                            "*", hf -> hf)),
+                    ObjectNode.class
+            );
+            return extractHitsWithHighlightsAndComposeResult(response);
+        } catch (IOException exc) {
+            throw new RuntimeException(exc);
+        }
+    }
 
+    private JsonNode extractHitsWithHighlightsAndComposeResult(SearchResponse<ObjectNode> response) {
+        ObjectNode resultNode = objectMapper.createObjectNode();
+        resultNode.put("timeout", response.timedOut());
+        TotalHits total = response.hits().total();
+        if (total != null) {
+            resultNode.put("total", total.value());
+        }
+        ArrayNode resultArray = objectMapper.createArrayNode();
+        for (Hit<ObjectNode> hit : response.hits().hits()) {
+            ObjectNode source = hit.source();
+            if (source != null) {
+                long rowNum = source.remove(TIE_BREAKER_ID).asLong();
+                ObjectNode dataNode = objectMapper.createObjectNode();
+                dataNode.put("num", rowNum);
+
+                for (String fieldName : hit.highlight().keySet()) {
+                    List<String> highlights = hit.highlight().get(fieldName);
+                    if (!highlights.isEmpty() && source.has(fieldName)) {
+                        source.put(fieldName, highlights.getFirst());
+                    }
+                }
+                dataNode.set("src", source);
+                resultArray.add(dataNode);
+            }
+        }
+        resultNode.set("rows", resultArray);
+        return resultNode;
+    }
 }
 
