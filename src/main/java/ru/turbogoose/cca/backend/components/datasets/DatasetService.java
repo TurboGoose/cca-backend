@@ -18,7 +18,9 @@ import ru.turbogoose.cca.backend.components.storage.Storage;
 import ru.turbogoose.cca.backend.components.storage.enricher.AnnotationEnricher;
 import ru.turbogoose.cca.backend.components.storage.enricher.EnricherFactory;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
+import ru.turbogoose.cca.backend.components.storage.info.StorageInfoRepository;
 import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
+import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -35,6 +37,7 @@ import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
 public class DatasetService {
     private final ModelMapper mapper;
     private final DatasetRepository datasetRepository;
+    private final StorageInfoRepository storageInfoRepository;
     private final AnnotationService annotationService;
     private final Searcher searcher;
     private final Storage<JsonNode, JsonNode> primaryStorage;
@@ -58,19 +61,18 @@ public class DatasetService {
             dataset.setName(datasetName);
             dataset.setSize(file.getSize());
             dataset.setCreated(LocalDateTime.now());
-
             datasetRepository.saveAndFlush(dataset); // integrity violation on duplicate
-            log.debug("[{}] dataset metadata saved into db", datasetName);
+            log.debug("[{}] dataset metadata saved into db", dataset.getId());
 
+            StorageInfo secondaryInfo = new StorageInfo(secondaryStorage.create(), StorageMode.SECONDARY);
+            dataset.addStorage(secondaryInfo);
+            secondaryInfo = storageInfoRepository.saveAndFlush(secondaryInfo);
+            log.debug("[{}] secondary storage created", dataset.getId());
 
-            dataset.addStorage(new StorageInfo(secondaryStorage.create(), StorageMode.SECONDARY));
-            datasetRepository.save(dataset);
-            StorageInfo secondaryInfo = dataset.getStorage(StorageMode.SECONDARY)
-                    .orElseThrow(() -> new IllegalStateException("No secondary storage available"));
-            log.debug("[{}] secondary storage created", datasetName);
-
+            secondaryInfo.setStatus(StorageStatus.LOADING);
+            storageInfoRepository.saveAndFlush(secondaryInfo);
             secondaryStorage.fill(secondaryInfo, file.getInputStream());
-            datasetRepository.save(dataset);
+            storageInfoRepository.saveAndFlush(secondaryInfo);
             log.debug("[{}] data saved into secondary storage", dataset.getId());
 
             new Thread(() -> migrateSecondaryStorageToPrimary(dataset)).start(); // TODO: add thread executor
@@ -91,13 +93,19 @@ public class DatasetService {
         try (Stream<JsonNode> dataStream = secondaryStorage.getAll(secondaryInfo)) {
             StorageInfo primaryInfo = new StorageInfo(primaryStorage.create(), StorageMode.PRIMARY);
             dataset.addStorage(primaryInfo);
+            primaryInfo = storageInfoRepository.saveAndFlush(primaryInfo);
+            log.debug("[{}] primary storage created", dataset.getId());
 
+            primaryInfo.setStatus(StorageStatus.LOADING);
+            storageInfoRepository.saveAndFlush(primaryInfo);
             primaryStorage.fill(primaryInfo, dataStream);
-            log.debug("[{}] saved to primary storage", dataset.getId());
+            storageInfoRepository.saveAndFlush(primaryInfo);
+            log.debug("[{}] data migrated to primary storage", dataset.getId());
         }
-        secondaryStorage.delete(secondaryInfo);
         dataset.removeStorage(secondaryInfo);
-        log.debug("[{}] deleted from secondary storage", dataset.getId());
+        storageInfoRepository.delete(secondaryInfo);
+        secondaryStorage.delete(secondaryInfo);
+        log.debug("[{}] secondary storage deleted", dataset.getId());
     }
 
     private void validateDatasetFileExtension(String filename) {
