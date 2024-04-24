@@ -48,7 +48,6 @@ public class CsvUtil {
 
     private static JsonNode csvLineToJsonNode(CSVRecord record) {
         ObjectNode json = objectMapper.createObjectNode();
-        json.put("num", record.getRecordNumber());
         for (Map.Entry<String, String> entry : record.toMap().entrySet()) {
             json.put(entry.getKey(), entry.getValue());
         }

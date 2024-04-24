@@ -44,8 +44,8 @@ public class JsonEnricher implements AnnotationEnricher {
                         generator.writeTree(dataObject);
                     }
                     dataObject = (ObjectNode) dataIterator.next();
-                    dataObject.put("num", ++dataRowNum);
                     dataObject.putArray("labels");
+                    dataRowNum++;
                 }
                 ArrayNode labels = (ArrayNode) dataObject.get("labels");
                 labels.add(annotation.getLabel().getName());
@@ -56,7 +56,6 @@ public class JsonEnricher implements AnnotationEnricher {
                     generator.writeTree(dataObject);
                 }
                 dataObject = (ObjectNode) dataIterator.next();
-                dataObject.put("num", ++dataRowNum);
                 dataObject.putArray("labels");
             }
             generator.writeTree(dataObject);

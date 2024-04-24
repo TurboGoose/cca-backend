@@ -85,7 +85,7 @@ class AnnotationEnricherTest {
         @Test
         public void jsonEnrichmentDense() {
             setupDataDenseAnnotations();
-            String expected = "[{\"string\":\"s1\",\"integer\":1,\"num\":1,\"labels\":[\"l1\",\"l2\"]},{\"string\":\"s2\",\"integer\":2,\"num\":2,\"labels\":[]},{\"string\":\"s3\",\"integer\":3,\"num\":3,\"labels\":[\"l3\"]},{\"string\":\"s4\",\"integer\":4,\"num\":4,\"labels\":[]},{\"string\":\"s5\",\"integer\":5,\"num\":5,\"labels\":[\"l4\",\"l5\"]}]";
+            String expected = "[{\"string\":\"s1\",\"integer\":1,\"labels\":[\"l1\",\"l2\"]},{\"string\":\"s2\",\"integer\":2,\"labels\":[]},{\"string\":\"s3\",\"integer\":3,\"labels\":[\"l3\"]},{\"string\":\"s4\",\"integer\":4,\"labels\":[]},{\"string\":\"s5\",\"integer\":5,\"labels\":[\"l4\",\"l5\"]}]";
             String actual = runEnrichment(EnricherFactory.getEnricher(FileExtension.JSON));
             assertEquals(expected, actual);
         }
@@ -94,7 +94,7 @@ class AnnotationEnricherTest {
         public void jsonEnrichmentSparse() {
             setupDataSparseAnnotations();
             System.out.println("jsonEnrichmentSparse");
-            String expected = "[{\"string\":\"s1\",\"integer\":1,\"num\":1,\"labels\":[\"l1\"]},{\"string\":\"s2\",\"integer\":2,\"num\":2,\"labels\":[]},{\"string\":\"s3\",\"integer\":3,\"num\":3,\"labels\":[]},{\"string\":\"s4\",\"integer\":4,\"num\":4,\"labels\":[]},{\"string\":\"s5\",\"integer\":5,\"num\":5,\"labels\":[]}]";
+            String expected = "[{\"string\":\"s1\",\"integer\":1,\"labels\":[\"l1\"]},{\"string\":\"s2\",\"integer\":2,\"labels\":[]},{\"string\":\"s3\",\"integer\":3,\"labels\":[]},{\"string\":\"s4\",\"integer\":4,\"labels\":[]},{\"string\":\"s5\",\"integer\":5,\"labels\":[]}]";
             String actual = runEnrichment(EnricherFactory.getEnricher(FileExtension.JSON));
             assertEquals(expected, actual);
         }
@@ -103,7 +103,7 @@ class AnnotationEnricherTest {
         public void jsonEnrichmentEmpty() {
             setupDataNoAnnotations();
             System.out.println("jsonEnrichmentEmpty");
-            String expected = "[{\"string\":\"s1\",\"integer\":1,\"num\":1,\"labels\":[]},{\"string\":\"s2\",\"integer\":2,\"num\":2,\"labels\":[]},{\"string\":\"s3\",\"integer\":3,\"num\":3,\"labels\":[]},{\"string\":\"s4\",\"integer\":4,\"num\":4,\"labels\":[]},{\"string\":\"s5\",\"integer\":5,\"num\":5,\"labels\":[]}]";
+            String expected = "[{\"string\":\"s1\",\"integer\":1,\"labels\":[]},{\"string\":\"s2\",\"integer\":2,\"labels\":[]},{\"string\":\"s3\",\"integer\":3,\"labels\":[]},{\"string\":\"s4\",\"integer\":4,\"labels\":[]},{\"string\":\"s5\",\"integer\":5,\"labels\":[]}]";
             String actual = runEnrichment(EnricherFactory.getEnricher(FileExtension.JSON));
             assertEquals(expected, actual);
         }
