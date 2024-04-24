@@ -8,9 +8,7 @@ import lombok.NoArgsConstructor;
 import ru.turbogoose.cca.backend.components.datasets.Dataset;
 
 @Data
-@Builder
 @NoArgsConstructor
-@AllArgsConstructor
 @Entity
 @Table(name = "labels",
         uniqueConstraints = {@UniqueConstraint(columnNames = {"dataset_id", "name"})})

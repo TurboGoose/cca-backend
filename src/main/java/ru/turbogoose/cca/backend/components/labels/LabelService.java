@@ -4,12 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.turbogoose.cca.backend.components.datasets.Dataset;
+import ru.turbogoose.cca.backend.components.datasets.DatasetService;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelListResponseDto;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
-import ru.turbogoose.cca.backend.components.datasets.Dataset;
-import ru.turbogoose.cca.backend.components.labels.Label;
-import ru.turbogoose.cca.backend.components.datasets.DatasetRepository;
-import ru.turbogoose.cca.backend.components.labels.LabelRepository;
 
 import java.util.List;
 
@@ -17,7 +15,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LabelService {
     private final LabelRepository labelRepository;
-    private final DatasetRepository datasetRepository;
+    private final DatasetService datasetService;
     private final ModelMapper mapper;
 
     public LabelListResponseDto getLabelListForDataset(int datasetId) {
@@ -31,28 +29,29 @@ public class LabelService {
 
     @Transactional
     public LabelResponseDto addLabelForDataset(int datasetId, String labelName) {
-        Dataset dataset = datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
-        Label label = Label.builder()
-                .name(labelName)
-                .dataset(dataset)
-                .build();
-        dataset.getLabels().add(label);
-        datasetRepository.save(dataset); // TODO: handle duplicate name?
+        Dataset dataset = datasetService.getDatasetById(datasetId);
+        Label label = new Label();
+        label.setName(labelName);
+        label.setDataset(dataset);
+        labelRepository.save(label); // integrity violation on duplicate
         return mapper.map(label, LabelResponseDto.class);
     }
 
     @Transactional
     public LabelResponseDto renameLabel(int labelId, String newName) {
-        Label label = labelRepository.findById(labelId)
-                .orElseThrow(() -> new IllegalStateException("Label with id{" + labelId + "} not found"));
+        Label label = findLabelById(labelId);
         label.setName(newName);
-        labelRepository.save(label); // TODO: handle duplicate name?
+        labelRepository.save(label); // integrity violation on duplicate
         return mapper.map(label, LabelResponseDto.class);
     }
 
     @Transactional
     public void deleteLabel(int labelId) {
         labelRepository.deleteById(labelId);
+    }
+
+    public Label findLabelById(int labelId) {
+        return labelRepository.findById(labelId)
+                .orElseThrow(() -> new IllegalStateException("Label with id{" + labelId + "} not found"));
     }
 }
