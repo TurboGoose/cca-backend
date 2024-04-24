@@ -75,6 +75,14 @@ public class DatasetService {
             storageInfoRepository.saveAndFlush(secondaryInfo);
             log.debug("[{}] data saved into secondary storage", dataset.getId());
 
+            if (secondaryInfo.getStatus() == StorageStatus.ERROR) { // throw error?
+                dataset.removeStorage(secondaryInfo);
+                storageInfoRepository.delete(secondaryInfo);
+                log.debug("[{}] secondary storage deleted due to an error", dataset.getId());
+                throw new RuntimeException("Failed to fill secondary storage");
+                // TODO: add retry scheduler
+            }
+
             new Thread(() -> migrateSecondaryStorageToPrimary(dataset)).start(); // TODO: add thread executor
             return mapper.map(dataset, DatasetResponseDto.class);
         } catch (IOException exc) {
