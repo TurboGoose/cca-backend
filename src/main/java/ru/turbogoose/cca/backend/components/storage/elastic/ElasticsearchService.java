@@ -5,12 +5,12 @@ import co.elastic.clients.elasticsearch._helpers.bulk.BulkIngester;
 import co.elastic.clients.elasticsearch._helpers.bulk.BulkListener;
 import co.elastic.clients.elasticsearch._types.FieldSort;
 import co.elastic.clients.elasticsearch._types.SortOrder;
-import co.elastic.clients.elasticsearch.core.CreateResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.HighlighterEncoder;
 import co.elastic.clients.elasticsearch.core.search.HighlighterType;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.TotalHits;
+import co.elastic.clients.elasticsearch.indices.CreateIndexResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -48,7 +49,8 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     @Override
     public InternalStorageInfo create() {
         try {
-            CreateResponse response = esClient.create(c -> c);
+            CreateIndexResponse response = esClient.indices().create(c -> c
+                    .index(UUID.randomUUID().toString()));
             return new InternalStorageInfo(response.index(), StorageStatus.CREATED);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
@@ -87,6 +89,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                 );
                 rowNum++;
             }
+            info.setStatus(StorageStatus.READY);
         } catch (Exception exc) {
             deleteStorage(info);
             info.setStatus(StorageStatus.ERROR);
@@ -112,9 +115,9 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                     ObjectNode.class
             ).hits().hits();
             return Stream.iterate(initHits,
-                            hits -> hits.size() == downloadBatchSize,
+                            hits -> !hits.isEmpty(),
                             hits -> nextPage(hits, info))
-                    .map(this::convertHits)
+                    .map(this::extractJsonDataFromHits)
                     .flatMap(List::stream);
         } catch (IOException exc) {
             throw new RuntimeException(exc);
@@ -141,7 +144,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         }
     }
 
-    private List<ObjectNode> convertHits(List<Hit<ObjectNode>> hits) {
+    private List<ObjectNode> extractJsonDataFromHits(List<Hit<ObjectNode>> hits) {
         return hits.stream()
                 .filter(hit -> hit.source() != null)
                 .map(hit -> {
