@@ -1,6 +1,7 @@
 package ru.turbogoose.cca.backend.components.storage;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.util.stream.Stream;
 
 @Service
+@Slf4j
 public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     private final Path rootFolderPath;
 
@@ -47,13 +49,12 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
         }
         Path storagePath = getStoragePath(storageInfo);
         try (in; OutputStream out = new FileOutputStream(storagePath.toFile())) {
-            storageInfo.setStatus(StorageStatus.LOADING);
             in.transferTo(out);
             storageInfo.setStatus(StorageStatus.READY);
         } catch (IOException exc) {
             deleteStorage(storagePath);
             storageInfo.setStatus(StorageStatus.ERROR);
-            throw new RuntimeException(exc);
+            log.error("Failed to fill FS storage", exc);
         }
     }
 
