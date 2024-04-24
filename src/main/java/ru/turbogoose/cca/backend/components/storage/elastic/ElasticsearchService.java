@@ -57,6 +57,9 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     @Override
     public void fill(InternalStorageInfo info, Stream<JsonNode> in) {
+        if (info.isStorageReady()) {
+            throw new IllegalStateException("Storage already filled");
+        }
         BulkListener<Long> listener = new CustomBulkListener();
         BulkIngester<Long> ingester = BulkIngester.of(b -> b
                 .client(esClient)
@@ -84,11 +87,18 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                 );
                 rowNum++;
             }
+        } catch (Exception exc) {
+            deleteStorage(info);
+            info.setStatus(StorageStatus.ERROR);
+            log.error("Failed to fill elastic storage", exc);
         }
     }
 
     @Override
     public Stream<JsonNode> getAll(InternalStorageInfo info) {
+        if (!info.isStorageReady()) {
+            throw new IllegalStateException("Storage not ready yet");
+        }
         try {
             List<Hit<ObjectNode>> initHits = esClient.search(g1 -> g1
                             .index(info.getStorageId())
@@ -143,6 +153,9 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     @Override
     public Stream<JsonNode> getPage(InternalStorageInfo info, Pageable pageable) {
+        if (!info.isStorageReady()) {
+            throw new IllegalStateException("Storage not ready yet");
+        }
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
@@ -175,6 +188,13 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     @Override
     public void delete(InternalStorageInfo info) {
+        if (!info.isStorageReady()) {
+            throw new IllegalStateException("Storage not ready yet");
+        }
+        deleteStorage(info);
+    }
+
+    private void deleteStorage(InternalStorageInfo info) {
         try {
             esClient.delete(d -> d
                     .index(info.getStorageId()));
@@ -185,6 +205,9 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     @Override
     public JsonNode search(InternalStorageInfo info, String query, Pageable pageable) {
+        if (!info.isStorageReady()) {
+            throw new IllegalStateException("Storage not ready yet");
+        }
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
