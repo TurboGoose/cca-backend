@@ -147,13 +147,10 @@ public class DatasetService {
         }
     }
 
-    public String search(int datasetId, String query, Pageable pageable) {
+    public JsonNode search(int datasetId, String query, Pageable pageable) {
         Dataset dataset = getDatasetById(datasetId);
-        String datasetName = dataset.getName();
-        if (!searcher.isAvailable(datasetName)) {
-            throw new IllegalStateException("Searcher for dataset %s not available yet".formatted(datasetName));
-        }
-        return searcher.search(datasetName, query, pageable).toString();
+        StorageInfo storageInfo = getStorageInfo(dataset);
+        return searcher.search(storageInfo, query, pageable);
     }
 
     public Dataset getDatasetById(int datasetId) {

@@ -1,5 +1,6 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -56,7 +57,7 @@ public class DatasetController {
     }
 
     @GetMapping(value = "/{id}/search", produces = MediaType.APPLICATION_JSON_VALUE)
-    public String search(@PathVariable int id, @RequestParam String query, Pageable pageable) {
+    public JsonNode search(@PathVariable int id, @RequestParam String query, Pageable pageable) {
         return datasetService.search(id, query, pageable);
     }
 
