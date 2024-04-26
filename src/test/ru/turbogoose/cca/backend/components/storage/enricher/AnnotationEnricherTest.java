@@ -26,16 +26,18 @@ class AnnotationEnricherTest {
     List<JsonNode> data;
 
     public void setupDataAndLabels() {
-        labels = List.of(
-                Label.builder().build(),
-                Label.builder().id(1).name("l1").build(),
-                Label.builder().id(2).name("l2").build(),
-                Label.builder().id(3).name("l3").build(),
-                Label.builder().id(4).name("l4").build(),
-                Label.builder().id(5).name("l5").build()
-        );
-
+        labels = IntStream.range(0, 10)
+                .mapToObj(this::getLabel)
+                .toList();
+        System.out.println(labels);
         data = generateData().map(map -> (JsonNode) objectMapper.valueToTree(map)).toList();
+    }
+
+    public Label getLabel(int i) {
+        Label label = new Label();
+        label.setId(i);
+        label.setName("l" + i);
+        return label;
     }
 
     private Stream<Map<Object, Object>> generateData() {
