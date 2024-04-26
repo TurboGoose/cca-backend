@@ -43,6 +43,8 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     private String queryTimeout;
     @Value("${elasticsearch.download.batch.size:10000}")
     private int downloadBatchSize;
+    @Value("${elasticsearch.max-concurrent-requests:1}")
+    private int maxConcurrentRequests;
 
     private final ElasticsearchClient esClient;
 
@@ -66,7 +68,8 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         BulkIngester<Long> ingester = BulkIngester.of(b -> b
                 .client(esClient)
                 .maxOperations(downloadBatchSize)
-                .flushInterval(2, TimeUnit.SECONDS)
+                .maxConcurrentRequests(maxConcurrentRequests)
+                .flushInterval(5, TimeUnit.SECONDS)
                 .listener(listener)
         );
 
@@ -75,7 +78,6 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
             Iterator<JsonNode> dataIterator = in.iterator();
             while (dataIterator.hasNext()) {
                 ObjectNode node = (ObjectNode) dataIterator.next();
-
                 node.put(TIE_BREAKER_ID, rowNum);
                 String rowId = Long.toString(rowNum);
 
