@@ -11,6 +11,7 @@ import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
+import ru.turbogoose.cca.backend.components.datasets.dto.SearchReadinessResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 
 import java.io.IOException;
@@ -54,6 +55,11 @@ public class DatasetController {
     @PutMapping( "/{id}")
     public void annotate(@RequestBody AnnotateRequestDto annotateDto) {
         annotationService.annotate(annotateDto);
+    }
+
+    @GetMapping(value = "/{id}/search/ready", produces = MediaType.APPLICATION_JSON_VALUE)
+    public SearchReadinessResponseDto isReadyForSearch(@PathVariable int id) {
+        return datasetService.isReadyForSearch(id);
     }
 
     @GetMapping(value = "/{id}/search", produces = MediaType.APPLICATION_JSON_VALUE)

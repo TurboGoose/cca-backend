@@ -1,5 +1,6 @@
 package ru.turbogoose.cca.backend.components.storage.elastic;
 
+import co.elastic.clients.elasticsearch.ElasticsearchAsyncClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._helpers.bulk.BulkIngester;
 import co.elastic.clients.elasticsearch._helpers.bulk.BulkListener;
@@ -22,8 +23,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
-import ru.turbogoose.cca.backend.components.storage.info.InternalStorageInfo;
-import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,24 +47,29 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     private int maxConcurrentRequests;
 
     private final ElasticsearchClient esClient;
+    private final ElasticsearchAsyncClient esAsyncClient;
+    private final ElasticsearchIndexStateCache esIndexStateCache;
+
 
     @Override
-    public InternalStorageInfo create() {
+    public String create() {
         try {
             CreateIndexResponse response = esClient.indices().create(c -> c
                     .index(UUID.randomUUID().toString()));
-            return new InternalStorageInfo(response.index(), StorageStatus.CREATED);
+            String indexId = response.index();
+            esIndexStateCache.add(indexId);
+            return indexId;
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
     @Override
-    public void fill(InternalStorageInfo info, Stream<JsonNode> in) {
-        if (info.isStorageReady()) {
+    public void fill(String storageId, Stream<JsonNode> in) {
+        if (isStorageReady(storageId)) {
             throw new IllegalStateException("Storage already filled");
         }
-        BulkListener<Long> listener = new CustomBulkListener();
+        BulkListener<Long> listener = new CustomBulkListener(storageId);
         BulkIngester<Long> ingester = BulkIngester.of(b -> b
                 .client(esClient)
                 .maxOperations(downloadBatchSize)
@@ -77,6 +81,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         long rowNum = 1;
         try (ingester) {
             Iterator<JsonNode> dataIterator = in.iterator();
+            log.debug("[{}] Start filling index", storageId);
             while (dataIterator.hasNext()) {
                 ObjectNode node = (ObjectNode) dataIterator.next();
                 node.put(TIE_BREAKER_ID, rowNum);
@@ -84,7 +89,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
                 ingester.add(op -> op
                                 .index(idx -> idx
-                                        .index(info.getStorageId())
+                                        .index(storageId)
                                         .id(rowId)
                                         .document(node)
                                 ),
@@ -92,27 +97,38 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                 );
                 rowNum++;
             }
-            info.setStatus(StorageStatus.READY); // TODO: return status or throw exc?
-        } catch (Exception exc) {
-            deleteStorage(info);
-            info.setStatus(StorageStatus.ERROR);
-            log.error("Failed to fill elastic storage", exc);
+            log.debug("[{}] Finish filling index", storageId);
+        } catch (RuntimeException exc) {
+            log.debug("[{}] Failed to fill index", storageId);
+            deleteStorage(storageId);
+            throw exc; // TODO: throw more meaningful exception
         }
+        esIndexStateCache.setReadyForRetrieval(storageId);
+        refreshAsync(storageId);
+    }
+
+    private void refreshAsync(String storageId) {
+        esAsyncClient.indices().refresh(r -> r
+                .index(storageId)
+        ).thenRun(() -> {
+            esIndexStateCache.setReadyForSearch(storageId);
+            log.debug("[{}] Index refreshed and ready for search", storageId);
+        });
     }
 
     @Override
-    public void fill(InternalStorageInfo info, InputStream in) {
+    public void fill(String storageId, InputStream in) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public Stream<JsonNode> getAll(InternalStorageInfo info) {
-        if (!info.isStorageReady()) {
+    public Stream<JsonNode> getAll(String storageId) {
+        if (!isStorageReady(storageId)) {
             throw new IllegalStateException("Storage not ready yet");
         }
         try {
             List<Hit<ObjectNode>> initHits = esClient.search(g1 -> g1
-                            .index(info.getStorageId())
+                            .index(storageId)
                             .size(downloadBatchSize)
                             .query(q1 -> q1
                                     .matchAll(m1 -> m1))
@@ -124,7 +140,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
             ).hits().hits();
             return Stream.iterate(initHits,
                             hits -> !hits.isEmpty(),
-                            hits -> nextPage(hits, info))
+                            hits -> nextPage(hits, storageId))
                     .map(this::extractJsonDataFromHits)
                     .flatMap(List::stream);
         } catch (IOException exc) {
@@ -132,11 +148,11 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         }
     }
 
-    private List<Hit<ObjectNode>> nextPage(List<Hit<ObjectNode>> hits, InternalStorageInfo info) {
+    private List<Hit<ObjectNode>> nextPage(List<Hit<ObjectNode>> hits, String storageId) {
         try {
             long searchAfter = hits.getLast().sort().getFirst().longValue();
             return esClient.search(g1 -> g1
-                            .index(info.getStorageId())
+                            .index(storageId)
                             .size(downloadBatchSize)
                             .query(q1 -> q1
                                     .matchAll(m1 -> m1))
@@ -163,15 +179,15 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     }
 
     @Override
-    public Stream<JsonNode> getPage(InternalStorageInfo info, Pageable pageable) {
-        if (!info.isStorageReady()) {
+    public Stream<JsonNode> getPage(String storageId, Pageable pageable) {
+        if (!isStorageReady(storageId)) {
             throw new IllegalStateException("Storage not ready yet");
         }
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
             SearchResponse<ObjectNode> response = esClient.search(g -> g
-                            .index(info.getStorageId())
+                            .index(storageId)
                             .from(from) // FIXME: int instead of long!!
                             .size(size)
                             .query(q -> q
@@ -198,32 +214,33 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     }
 
     @Override
-    public void delete(InternalStorageInfo info) {
-        if (!info.isStorageReady()) {
+    public void delete(String storageId) {
+        if (!isStorageReady(storageId)) {
             throw new IllegalStateException("Storage not ready yet");
         }
-        deleteStorage(info);
+        deleteStorage(storageId);
     }
 
-    private void deleteStorage(InternalStorageInfo info) {
+    private void deleteStorage(String storageId) {
         try {
+            esIndexStateCache.delete(storageId);
             esClient.indices().delete(d -> d
-                    .index(info.getStorageId()));
+                    .index(storageId));
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
     @Override
-    public JsonNode search(InternalStorageInfo info, String query, Pageable pageable) {
-        if (!info.isStorageReady()) {
-            throw new IllegalStateException("Storage not ready yet");
+    public JsonNode search(String storageId, String query, Pageable pageable) {
+        if (!isSearcherReady(storageId)) {
+            throw new IllegalStateException("Searcher not ready yet");
         }
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
             SearchResponse<ObjectNode> response = esClient.search(g -> g
-                            .index(info.getStorageId())
+                            .index(storageId)
                             .from(from)
                             .size(size)
                             .timeout(queryTimeout)
@@ -273,6 +290,16 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         }
         resultNode.set("rows", resultArray);
         return resultNode;
+    }
+
+    @Override
+    public boolean isStorageReady(String storageId) {
+        return esIndexStateCache.contains(storageId) && esIndexStateCache.isReadyForRetrieval(storageId);
+    }
+
+    @Override
+    public boolean isSearcherReady(String storageId) {
+        return esIndexStateCache.contains(storageId) && esIndexStateCache.isReadyForSearch(storageId);
     }
 }
 

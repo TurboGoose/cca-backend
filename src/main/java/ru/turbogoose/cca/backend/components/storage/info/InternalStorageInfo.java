@@ -21,7 +21,4 @@ public class InternalStorageInfo {
         this.status = info.getStatus();
     }
 
-    public boolean isStorageReady() {
-        return status == StorageStatus.READY;
-    }
 }
