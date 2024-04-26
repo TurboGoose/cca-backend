@@ -199,7 +199,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     private void deleteStorage(InternalStorageInfo info) {
         try {
-            esClient.delete(d -> d
+            esClient.indices().delete(d -> d
                     .index(info.getStorageId()));
         } catch (IOException exc) {
             throw new RuntimeException(exc);
