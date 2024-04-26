@@ -8,12 +8,8 @@ import java.util.stream.Stream;
 
 public interface Storage<I, O> {
     InternalStorageInfo create();
-    default void fill(InternalStorageInfo info, Stream<I> in) {
-        throw new UnsupportedOperationException();
-    }
-    default void fill(InternalStorageInfo info, InputStream in) {
-        throw new UnsupportedOperationException();
-    }
+    void fill(InternalStorageInfo info, Stream<I> in);
+    void fill(InternalStorageInfo info, InputStream in);
     Stream<O> getAll(InternalStorageInfo info);
     Stream<O> getPage(InternalStorageInfo info, Pageable pageable);
     void delete(InternalStorageInfo info);

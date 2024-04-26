@@ -26,6 +26,7 @@ import ru.turbogoose.cca.backend.components.storage.info.InternalStorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -91,12 +92,17 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                 );
                 rowNum++;
             }
-            info.setStatus(StorageStatus.READY);
+            info.setStatus(StorageStatus.READY); // TODO: return status or throw exc?
         } catch (Exception exc) {
             deleteStorage(info);
             info.setStatus(StorageStatus.ERROR);
             log.error("Failed to fill elastic storage", exc);
         }
+    }
+
+    @Override
+    public void fill(InternalStorageInfo info, InputStream in) {
+        throw new UnsupportedOperationException();
     }
 
     @Override

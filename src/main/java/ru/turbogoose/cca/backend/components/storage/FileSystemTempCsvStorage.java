@@ -1,6 +1,7 @@
 package ru.turbogoose.cca.backend.components.storage;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
@@ -9,18 +10,25 @@ import ru.turbogoose.cca.backend.common.util.CsvUtil;
 import ru.turbogoose.cca.backend.components.storage.info.InternalStorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 @Service
 @Slf4j
 public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     private final Path rootFolderPath;
+
+    @PreDestroy
+    public void clearTmp() {
+        String exclusion = "test_file.tmp";
+        Arrays.stream(Objects.requireNonNull(rootFolderPath.toFile().listFiles()))
+                .filter(file -> !file.getName().equals(exclusion))
+                .forEach(File::delete);
+    }
 
     public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder:#{null}}") String rootFolderPath) {
         try {
@@ -40,6 +48,11 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public void fill(InternalStorageInfo info, Stream<Object> in) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
