@@ -54,7 +54,7 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
                     .storageId(storageId)
                     .status(CREATED)
                     .build();
-            storageInfoHelper.getStorageInfoRepository().saveAndFlush(info);
+            storageInfoHelper.getStorageInfoRepository().save(info);
             return storageId;
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -116,7 +116,6 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
 
     private void deleteStorage(String storageId) {
         try {
-            storageInfoHelper.getStorageInfoRepository().deleteByStorageId(storageId);
             Files.deleteIfExists(Path.of(storageId));
         } catch (IOException exc) {
             throw new RuntimeException(exc);

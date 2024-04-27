@@ -63,7 +63,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                     .storageId(indexId)
                     .status(StorageStatus.CREATED)
                     .build();
-            storageInfoHelper.getStorageInfoRepository().saveAndFlush(info);
+            storageInfoHelper.getStorageInfoRepository().save(info);
             return indexId;
         } catch (IOException exc) {
             throw new RuntimeException(exc);
@@ -230,7 +230,6 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     private void deleteStorage(String storageId) {
         try {
-            storageInfoHelper.getStorageInfoRepository().deleteByStorageId(storageId);
             esClient.indices().delete(d -> d
                     .index(storageId));
         } catch (IOException exc) {

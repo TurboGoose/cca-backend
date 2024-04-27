@@ -4,19 +4,15 @@ import jakarta.persistence.*;
 import lombok.*;
 import ru.turbogoose.cca.backend.components.labels.Label;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
-import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Data
 @NoArgsConstructor
-@Builder
-@AllArgsConstructor
 @Entity
-@Table(name="datasets")
+@Table(name = "datasets")
 public class Dataset {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,20 +36,40 @@ public class Dataset {
     @EqualsAndHashCode.Exclude
     private List<StorageInfo> storages = new ArrayList<>();
 
+    public void setLabels(List<Label> labels) {
+        this.labels.clear();
+        this.labels.addAll(labels);
+    }
+
+    public void setStorages(List<StorageInfo> storages) {
+        this.storages.clear();
+        this.storages.addAll(storages);
+    }
+
+    public void addLabel(Label label) {
+        if (label != null) {
+            labels.add(label);
+            label.setDataset(this);
+        }
+    }
+
+    public void removeLabel(Label label) {
+        if (label != null) {
+            labels.remove(label);
+            label.setDataset(null);
+        }
+    }
+
     public void addStorage(StorageInfo storageInfo) {
         if (storageInfo != null) {
-            getStorages().add(storageInfo);
+            storages.add(storageInfo);
             storageInfo.setDataset(this);
         }
     }
 
-    public Optional<StorageInfo> getStorage(StorageMode mode) {
-        return getStorages().stream().filter(s -> s.getMode() == mode).findFirst();
-    }
-
     public void removeStorage(StorageInfo storageInfo) {
         if (storageInfo != null) {
-            getStorages().remove(storageInfo);
+            storages.remove(storageInfo);
             storageInfo.setDataset(null);
         }
     }

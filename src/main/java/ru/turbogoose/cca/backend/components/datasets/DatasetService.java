@@ -60,27 +60,29 @@ public class DatasetService {
         }
     }
 
-    public DatasetResponseDto uploadDataset(MultipartFile file) {
+    private Dataset composeDatasetFromFile(MultipartFile file) {
         validateDatasetFileExtension(file.getOriginalFilename());
         String datasetName = removeExtension(file.getOriginalFilename());
-        Dataset dataset = datasetRepository.saveAndFlush(
-                Dataset.builder()
-                        .name(datasetName)
-                        .size(file.getSize())
-                        .created(LocalDateTime.now())
-                        .build()
-        ); // integrity violation on duplicate
+        Dataset dataset = new Dataset();
+        dataset.setName(datasetName);
+        dataset.setSize(file.getSize());
+        dataset.setCreated(LocalDateTime.now());
+        return dataset;
+    }
+
+    public DatasetResponseDto uploadDataset(MultipartFile file) {
+        Dataset dataset = datasetRepository.save(composeDatasetFromFile(file)); // integrity violation on duplicate
         log.debug("[{}] dataset metadata saved into db", dataset.getId());
 
         String secondaryId = secondaryStorage.create();
         StorageInfo secondaryInfo = storageInfoHelper.getInfoByStorageIdOrThrow(secondaryId);
         secondaryInfo.setMode(StorageMode.SECONDARY);
         dataset.addStorage(secondaryInfo);
-        datasetRepository.saveAndFlush(dataset);
+        storageInfoHelper.getStorageInfoRepository().save(secondaryInfo);
         log.debug("[{}] secondary storage created", dataset.getId());
 
         try {
-            secondaryStorage.fill(secondaryId, file.getInputStream());
+            secondaryStorage.fill(secondaryId, file.getInputStream()); // potentially long task
             log.debug("[{}] data saved into secondary storage", dataset.getId());
 
             new Thread(() -> migrateSecondaryStorageToPrimary(dataset, secondaryInfo)).start(); // TODO: add thread executor
@@ -88,6 +90,7 @@ public class DatasetService {
 
         } catch (RuntimeException exc) { // TODO: storage filling exception here
             dataset.removeStorage(secondaryInfo);
+            datasetRepository.save(dataset);
             log.debug("[{}] secondary storage deleted due to a filling error", dataset.getId());
             throw new RuntimeException("Failed to fill secondary storage", exc);
 
@@ -97,19 +100,23 @@ public class DatasetService {
     }
 
     private void migrateSecondaryStorageToPrimary(Dataset dataset, StorageInfo secondaryInfo) {
-        try (Stream<JsonNode> dataStream = secondaryStorage.getAll(secondaryInfo.getStorageId())) {
-            String primaryId = primaryStorage.create();
-            StorageInfo primaryInfo = storageInfoHelper.getInfoByStorageIdOrThrow(primaryId);
-            primaryInfo.setMode(StorageMode.PRIMARY);
-            dataset.addStorage(primaryInfo);
-            datasetRepository.saveAndFlush(dataset);
-            log.debug("[{}] primary storage created", dataset.getId());
+        String secondaryId = secondaryInfo.getStorageId();
+        String primaryId = primaryStorage.create();
+        StorageInfo primaryInfo = storageInfoHelper.getInfoByStorageIdOrThrow(primaryId);
+        primaryInfo.setMode(StorageMode.PRIMARY);
+        dataset.addStorage(primaryInfo);
+        storageInfoHelper.getStorageInfoRepository().save(primaryInfo);
+        log.debug("[{}] primary storage created", dataset.getId());
 
-            primaryStorage.fill(primaryId, dataStream);
+        try (Stream<JsonNode> dataStream = secondaryStorage.getAll(secondaryId)) {
+            primaryStorage.fill(primaryId, dataStream); // potentially long task
             log.debug("[{}] data migrated to primary storage", dataset.getId());
         }
+
+        storageInfoHelper.updateStatus(primaryInfo);
         dataset.removeStorage(secondaryInfo);
-        secondaryStorage.delete(secondaryInfo.getStorageId());
+        secondaryStorage.delete(secondaryId);
+        datasetRepository.save(dataset);
         log.debug("[{}] secondary storage deleted", dataset.getId());
     }
 
@@ -137,9 +144,10 @@ public class DatasetService {
     @Transactional
     public void deleteDataset(int datasetId) {
         Dataset dataset = getDatasetByIdOrThrow(datasetId);
-        StorageInfo storageInfo = getStorageInfo(dataset);
-        getStorage(storageInfo.getMode()).delete(storageInfo.getStorageId());
-        datasetRepository.deleteById(datasetId);
+        for (StorageInfo storage : dataset.getStorages()) {
+            getStorage(storage.getMode()).delete(storage.getStorageId());
+        }
+        datasetRepository.delete(dataset);
     }
 
     @Transactional(readOnly = true)

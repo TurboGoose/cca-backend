@@ -14,6 +14,11 @@ public class StorageInfoHelper {
         storageInfoRepository.updateStorageStatusById(storageId, status);
     }
 
+    public void updateStatus(StorageInfo storageInfo) {
+        StorageInfo actualStorageInfo = getInfoByStorageIdOrThrow(storageInfo.getStorageId());
+        storageInfo.setStatus(actualStorageInfo.getStatus());
+    }
+
     public StorageInfo getInfoByStorageIdOrThrow(String storageId) {
         return storageInfoRepository.getByStorageId(storageId).orElseThrow(
                 () -> new IllegalStateException(String.format("Storage with id %s not found", storageId)));
