@@ -1,10 +1,7 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import lombok.*;
 import ru.turbogoose.cca.backend.components.labels.Label;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
@@ -16,6 +13,8 @@ import java.util.Optional;
 
 @Data
 @NoArgsConstructor
+@Builder
+@AllArgsConstructor
 @Entity
 @Table(name="datasets")
 public class Dataset {

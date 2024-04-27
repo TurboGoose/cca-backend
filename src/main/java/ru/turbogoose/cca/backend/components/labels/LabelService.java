@@ -29,7 +29,7 @@ public class LabelService {
 
     @Transactional
     public LabelResponseDto addLabelForDataset(int datasetId, String labelName) {
-        Dataset dataset = datasetService.getDatasetById(datasetId);
+        Dataset dataset = datasetService.getDatasetByIdOrThrow(datasetId);
         Label label = new Label();
         label.setName(labelName);
         label.setDataset(dataset);

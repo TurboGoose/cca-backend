@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.storage;
+package ru.turbogoose.cca.backend.components.storage.filesystem;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PreDestroy;
@@ -7,6 +7,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import ru.turbogoose.cca.backend.common.util.CsvUtil;
+import ru.turbogoose.cca.backend.components.storage.Storage;
+import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
+import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -15,10 +18,13 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+import static ru.turbogoose.cca.backend.components.storage.info.StorageStatus.*;
+
 @Service
 @Slf4j
 public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     private final Path rootFolderPath;
+    private final StorageInfoHelper storageInfoHelper;
 
     @PreDestroy
     public void clearTmp() { // TODO: remove!
@@ -28,7 +34,9 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
                 .forEach(File::delete);
     }
 
-    public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder:#{null}}") String rootFolderPath) {
+    public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder:#{null}}") String rootFolderPath,
+                                    StorageInfoHelper storageInfoHelper) {
+        this.storageInfoHelper = storageInfoHelper;
         try {
             this.rootFolderPath = rootFolderPath != null
                     ? Files.createDirectories(Path.of(rootFolderPath))
@@ -41,8 +49,13 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     @Override
     public String create() {
         try {
-            Path path = Files.createTempFile(rootFolderPath, null, null);
-            return path.toString();
+            String storageId = Files.createTempFile(rootFolderPath, null, null).toString();
+            StorageInfo info = StorageInfo.builder()
+                    .storageId(storageId)
+                    .status(CREATED)
+                    .build();
+            storageInfoHelper.getStorageInfoRepository().saveAndFlush(info);
+            return storageId;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -55,11 +68,16 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
 
     @Override
     public void fill(String storageId, InputStream in) {
+        if (isStorageReady(storageId)) {
+            throw new IllegalStateException("Storage already exists and filled");
+        }
+        storageInfoHelper.setStatusAndSave(storageId, LOADING);
         Path storagePath = Path.of(storageId);
         try (in; OutputStream out = new FileOutputStream(storagePath.toFile())) {
             in.transferTo(out);
+            storageInfoHelper.setStatusAndSave(storageId, READY);
         } catch (IOException exc) {
-            deleteStorage(storagePath);
+            deleteStorage(storageId);
             throw new RuntimeException(); // TODO: replace for more meaningful exception
         }
     }
@@ -93,13 +111,13 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
         if (!isStorageReady(storageId)) {
             throw new IllegalStateException("Storage not ready yet");
         }
-        Path storagePath = Path.of(storageId);
-        deleteStorage(storagePath);
+        deleteStorage(storageId);
     }
 
-    private void deleteStorage(Path storagePath) {
+    private void deleteStorage(String storageId) {
         try {
-            Files.deleteIfExists(storagePath);
+            storageInfoHelper.getStorageInfoRepository().deleteByStorageId(storageId);
+            Files.deleteIfExists(Path.of(storageId));
         } catch (IOException exc) {
             throw new RuntimeException(exc);
         }
@@ -107,6 +125,6 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
 
     @Override
     public boolean isStorageReady(String storageId) {
-        return Files.exists(Path.of(storageId));
+        return Files.exists(Path.of(storageId)) && storageInfoHelper.hasAnyOfStatuses(storageId, READY);
     }
 }

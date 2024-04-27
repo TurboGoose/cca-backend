@@ -1,8 +1,6 @@
 package ru.turbogoose.cca.backend.components.labels;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.turbogoose.cca.backend.components.datasets.Dataset;

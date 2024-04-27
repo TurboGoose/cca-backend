@@ -18,6 +18,7 @@ public class StorageInfo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    @Column(unique = true, nullable = false)
     private String storageId;
 
     @Enumerated(EnumType.STRING)
@@ -28,8 +29,4 @@ public class StorageInfo {
 
     @ManyToOne
     private Dataset dataset;
-
-    public boolean isStorageReady() {
-        return status == StorageStatus.READY;
-    }
 }

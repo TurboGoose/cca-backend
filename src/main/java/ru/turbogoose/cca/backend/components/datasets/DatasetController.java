@@ -7,8 +7,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
+import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.SearchReadinessResponseDto;
@@ -70,7 +70,7 @@ public class DatasetController {
     @GetMapping(value = "/{id}/download", produces = {"application/csv", "application/json"})
     public void downloadFile(@PathVariable int id, @RequestParam(value = "ext") FileExtension extension,
                              HttpServletResponse response) throws IOException {
-        Dataset dataset = datasetService.getDatasetById(id);
+        Dataset dataset = datasetService.getDatasetByIdOrThrow(id);
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"%s\"".formatted(composeDatasetFileName(dataset, extension)));
         try (OutputStream out = response.getOutputStream()) {
