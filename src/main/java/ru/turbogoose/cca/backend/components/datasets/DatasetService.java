@@ -3,11 +3,14 @@ package ru.turbogoose.cca.backend.components.datasets;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.csv.CSVRecord;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import ru.turbogoose.cca.backend.common.util.CsvUtil;
+import ru.turbogoose.cca.backend.common.util.LongCounter;
 import ru.turbogoose.cca.backend.components.storage.enricher.AnnotationEnricher;
 import ru.turbogoose.cca.backend.components.storage.enricher.EnricherFactory;
 import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
@@ -27,6 +30,7 @@ import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static ru.turbogoose.cca.backend.common.util.Util.removeExtension;
@@ -42,7 +46,7 @@ public class DatasetService {
     private final AnnotationService annotationService;
     private final Searcher searcher;
     private final Storage<JsonNode, JsonNode> primaryStorage;
-    private final Storage<Object, JsonNode> secondaryStorage;
+    private final Storage<CSVRecord, JsonNode> secondaryStorage;
     private final StorageInfoHelper storageInfoHelper;
 
     public DatasetListResponseDto getAllDatasets() {
@@ -82,8 +86,14 @@ public class DatasetService {
         log.debug("[{}] secondary storage created", dataset.getId());
 
         try {
-            secondaryStorage.fill(secondaryId, file.getInputStream()); // potentially long task
+            LongCounter rowCounter = new LongCounter(0);
+            Stream<CSVRecord> dataStream = CsvUtil.transferToCsvStream(file.getInputStream())
+                    .peek(record -> rowCounter.increment());
+
+            secondaryStorage.fill(secondaryId, dataStream); // potentially long task
             log.debug("[{}] data saved into secondary storage", dataset.getId());
+
+            dataset.setTotalRows(rowCounter.get());
 
             new Thread(() -> migrateSecondaryStorageToPrimary(dataset, secondaryInfo)).start(); // TODO: add thread executor
             return mapper.map(dataset, DatasetResponseDto.class);
@@ -94,7 +104,8 @@ public class DatasetService {
             log.debug("[{}] secondary storage deleted due to a filling error", dataset.getId());
             throw new RuntimeException("Failed to fill secondary storage", exc);
 
-        } catch (IOException exc) {
+        }
+        catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
@@ -105,7 +116,7 @@ public class DatasetService {
         StorageInfo primaryInfo = storageInfoHelper.getInfoByStorageIdOrThrow(primaryId);
         primaryInfo.setMode(StorageMode.PRIMARY);
         dataset.addStorage(primaryInfo);
-        storageInfoHelper.getStorageInfoRepository().save(primaryInfo);
+        datasetRepository.save(dataset);
         log.debug("[{}] primary storage created", dataset.getId());
 
         try (Stream<JsonNode> dataStream = secondaryStorage.getAll(secondaryId)) {

@@ -124,11 +124,6 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     }
 
     @Override
-    public void fill(String storageId, InputStream in) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public Stream<JsonNode> getAll(String storageId) {
         if (!isStorageReady(storageId)) {
             throw new IllegalStateException("Storage not ready yet");

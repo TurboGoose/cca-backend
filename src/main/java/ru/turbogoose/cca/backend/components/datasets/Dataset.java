@@ -21,7 +21,7 @@ public class Dataset {
     private String name;
     @Column(nullable = false)
     private Long size;
-    private Integer totalRows; // TODO: Long?
+    private Long totalRows;
     @Column(nullable = false)
     private LocalDateTime created;
     private LocalDateTime lastUpdated;

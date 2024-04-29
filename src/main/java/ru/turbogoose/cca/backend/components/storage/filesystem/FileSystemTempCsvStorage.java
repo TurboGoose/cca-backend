@@ -3,6 +3,7 @@ package ru.turbogoose.cca.backend.components.storage.filesystem;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.csv.CSVRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,7 +23,7 @@ import static ru.turbogoose.cca.backend.components.storage.info.StorageStatus.*;
 
 @Service
 @Slf4j
-public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
+public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
     private final Path rootFolderPath;
     private final StorageInfoHelper storageInfoHelper;
 
@@ -62,21 +63,15 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
     }
 
     @Override
-    public void fill(String storageId, Stream<Object> in) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void fill(String storageId, InputStream in) {
+    public void fill(String storageId, Stream<CSVRecord> in) {
         if (isStorageReady(storageId)) {
             throw new IllegalStateException("Storage already exists and filled");
         }
         storageInfoHelper.setStatusAndSave(storageId, LOADING);
-        Path storagePath = Path.of(storageId);
-        try (in; OutputStream out = new FileOutputStream(storagePath.toFile())) {
-            in.transferTo(out);
+        try (in) {
+            CsvUtil.writeCsvStreamToFile(in, storageId);
             storageInfoHelper.setStatusAndSave(storageId, READY);
-        } catch (IOException exc) {
+        } catch (Exception exc) {
             deleteStorage(storageId);
             throw new RuntimeException(); // TODO: replace for more meaningful exception
         }
@@ -90,8 +85,8 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
         if (!isStorageReady(storageId)) {
             throw new IllegalStateException("Storage not ready yet");
         }
-        Path storagePath = Path.of(storageId);
-        return CsvUtil.readCsvAsJson(storagePath);
+        return CsvUtil.readCsvStreamFromFile(storageId)
+                .map(CsvUtil::csvRecordToJsonNode);
     }
 
     /**
@@ -102,8 +97,12 @@ public class FileSystemTempCsvStorage implements Storage<Object, JsonNode> {
         if (!isStorageReady(storageId)) {
             throw new IllegalStateException("Storage not ready yet");
         }
-        Path storagePath = Path.of(storageId);
-        return CsvUtil.readCsvPageAsJson(storagePath, pageable);
+        long offset = pageable.getOffset();
+        int size = pageable.getPageSize();
+        return CsvUtil.readCsvStreamFromFile(storageId)
+                .skip(offset)
+                .limit(size)
+                .map(CsvUtil::csvRecordToJsonNode);
     }
 
     @Override
