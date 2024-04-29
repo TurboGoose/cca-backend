@@ -42,7 +42,8 @@ public class CsvUtil {
         try (dataStream) {
             Iterator<CSVRecord> iterator = dataStream.iterator();
             if (!iterator.hasNext()) {
-                throw new IllegalStateException("CSV stream from file has no records");
+                dataStream.close();
+                return;
             }
             CSVRecord record = iterator.next();
             CSVFormat csvFormat = CSVFormat.DEFAULT.builder()

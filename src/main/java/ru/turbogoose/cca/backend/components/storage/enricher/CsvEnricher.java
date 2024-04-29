@@ -26,7 +26,7 @@ public class CsvEnricher implements AnnotationEnricher{
     public void enrichAndWrite(Stream<JsonNode> dataStream, Stream<Annotation> annotationStream, OutputStream out) {
         Iterator<JsonNode> dataIterator = dataStream.iterator();
         if (!dataIterator.hasNext()) {
-            throw new IllegalStateException("Data iterator has no elements");
+            return;
         }
 
         long dataRowNum = offset + 1;
