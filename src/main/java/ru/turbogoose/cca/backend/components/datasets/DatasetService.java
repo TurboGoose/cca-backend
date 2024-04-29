@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -93,8 +94,9 @@ public class DatasetService {
             log.debug("[{}] data saved into secondary storage", dataset.getId());
 
             dataset.setTotalRows(rowCounter.get());
+            datasetRepository.save(dataset);
 
-            new Thread(() -> migrateSecondaryStorageToPrimary(dataset, secondaryInfo)).start(); // TODO: add thread executor
+            migrateSecondaryStorageToPrimary(dataset, secondaryInfo);
             return mapper.map(dataset, DatasetResponseDto.class);
 
         } catch (RuntimeException exc) { // TODO: storage filling exception here
@@ -109,13 +111,14 @@ public class DatasetService {
         }
     }
 
-    private void migrateSecondaryStorageToPrimary(Dataset dataset, StorageInfo secondaryInfo) {
+    @Async
+    protected void migrateSecondaryStorageToPrimary(Dataset dataset, StorageInfo secondaryInfo) {
         String secondaryId = secondaryInfo.getStorageId();
         String primaryId = primaryStorage.create();
         StorageInfo primaryInfo = storageInfoHelper.getInfoByStorageIdOrThrow(primaryId);
         primaryInfo.setMode(StorageMode.PRIMARY);
         dataset.addStorage(primaryInfo);
-        datasetRepository.save(dataset);
+        storageInfoHelper.getStorageInfoRepository().save(primaryInfo);
         log.debug("[{}] primary storage created", dataset.getId());
 
         try (Stream<JsonNode> dataStream = secondaryStorage.getAll(secondaryId)) {
