@@ -9,9 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import ru.turbogoose.cca.backend.common.util.CsvUtil;
 import ru.turbogoose.cca.backend.components.storage.Storage;
-import ru.turbogoose.cca.backend.components.storage.exception.StorageAlreadyExistsException;
 import ru.turbogoose.cca.backend.components.storage.exception.StorageException;
-import ru.turbogoose.cca.backend.components.storage.exception.StorageNotReadyException;
+import ru.turbogoose.cca.backend.components.storage.exception.NotReadyException;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 
@@ -71,7 +70,7 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
     @Override
     public void fill(String storageId, Stream<CSVRecord> in) {
         if (isStorageReady(storageId)) {
-            throw new StorageAlreadyExistsException("Storage already exists and filled",
+            throw new StorageException("Storage already exists and filled",
                     "FS storage %s already exists and filled".formatted(storageId));
         }
         storageInfoHelper.setStatusAndSave(storageId, LOADING);
@@ -132,7 +131,7 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
 
     private void assertStorageIsReady(String storageId) {
         if (!isStorageReady(storageId)) {
-            throw new StorageNotReadyException("Storage not ready yet",
+            throw new NotReadyException("Storage not ready yet",
                     "FS storage %s not ready yet".formatted(storageId));
         }
     }

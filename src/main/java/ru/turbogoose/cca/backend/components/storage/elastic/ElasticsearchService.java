@@ -23,7 +23,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
-import ru.turbogoose.cca.backend.components.storage.exception.*;
+import ru.turbogoose.cca.backend.components.storage.exception.SearcherException;
+import ru.turbogoose.cca.backend.components.storage.exception.StorageException;
+import ru.turbogoose.cca.backend.components.storage.exception.NotReadyException;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
@@ -76,7 +78,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     @Override
     public void fill(String storageId, Stream<JsonNode> in) {
         if (isStorageReady(storageId)) {
-            throw new StorageAlreadyExistsException("Storage already exists and filled",
+            throw new StorageException("Storage already exists and filled",
                     "Elastic storage %s already exists and filled".formatted(storageId));
         }
         storageInfoHelper.setStatusAndSave(storageId, StorageStatus.LOADING);
@@ -236,7 +238,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     @Override
     public JsonNode search(String storageId, String query, Pageable pageable) {
         if (!isSearcherReady(storageId)) {
-            throw new SearcherNotReadyException("Searcher not ready yet",
+            throw new NotReadyException("Searcher not ready yet",
                     "Elastic storage %s not ready for search yet".formatted(storageId));
         }
         try {
@@ -319,7 +321,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     private void assertStorageIsReady(String storageId) {
         if (!isStorageReady(storageId)) {
-            throw new StorageNotReadyException("Storage not ready yet",
+            throw new NotReadyException("Storage not ready yet",
                     "Elastic storage %s not ready yet".formatted(storageId));
         }
     }

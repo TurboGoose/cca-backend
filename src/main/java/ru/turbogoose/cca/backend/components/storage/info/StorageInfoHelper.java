@@ -21,7 +21,7 @@ public class StorageInfoHelper {
 
     public StorageInfo getInfoByStorageIdOrThrow(String storageId) {
         return storageInfoRepository.getByStorageId(storageId).orElseThrow(
-                () -> new IllegalStateException(String.format("Storage with id %s not found", storageId)));
+                () -> new IllegalStateException("Storage with id %s not found".formatted(storageId)));
     }
 
     public boolean hasAnyOfStatuses(String storageId, StorageStatus status, StorageStatus... statuses) {
