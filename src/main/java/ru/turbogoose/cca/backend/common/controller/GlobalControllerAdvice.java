@@ -21,26 +21,29 @@ public class GlobalControllerAdvice {
     @ExceptionHandler({IllegalArgumentException.class, ConversionFailedException.class})
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponseDto handle(RuntimeException exception) {
-        log.error("", exception);
+        log.debug(exception.getMessage());
         return composeErrorResponse(exception.getMessage());
     }
 
     @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ErrorResponseDto handle(NotFoundException exception) {
-        return logAndComposeErrorResponse(exception);
+        log.debug(exception.getMessage());
+        return composeErrorResponse(exception.getUserMessage());
     }
 
     @ExceptionHandler(NotReadyException.class)
     @ResponseStatus(HttpStatus.TOO_EARLY)
     public ErrorResponseDto handle(NotReadyException exception) {
-        return logAndComposeErrorResponse(exception);
+        log.debug(exception.getMessage());
+        return composeErrorResponse(exception.getUserMessage());
     }
 
     @ExceptionHandler(AlreadyExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponseDto handle(AlreadyExistsException exception) {
-        return logAndComposeErrorResponse(exception);
+        log.debug(exception.getMessage());
+        return composeErrorResponse(exception.getUserMessage());
     }
 
     @ExceptionHandler({SearcherException.class, StorageException.class, EnrichmentException.class})
@@ -51,7 +54,7 @@ public class GlobalControllerAdvice {
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public void handle(Exception exception) {
+    public void handleDefault(Exception exception) {
         log.error("", exception);
     }
 
