@@ -23,17 +23,21 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
+import ru.turbogoose.cca.backend.components.storage.exception.*;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 import ru.turbogoose.cca.backend.components.storage.info.StorageStatus;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+
+import static ru.turbogoose.cca.backend.components.storage.info.StorageStatus.READY;
 
 @Service
 @RequiredArgsConstructor
@@ -64,15 +68,16 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                     .build();
             storageInfoHelper.getStorageInfoRepository().save(info);
             return indexId;
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            throw new StorageException("Failed to create elastic storage", exc);
         }
     }
 
     @Override
     public void fill(String storageId, Stream<JsonNode> in) {
         if (isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage already exists and filled");
+            throw new StorageAlreadyExistsException("Storage already exists and filled",
+                    "Elastic storage %s already exists and filled".formatted(storageId));
         }
         storageInfoHelper.setStatusAndSave(storageId, StorageStatus.LOADING);
         BulkListener<Long> listener = new CustomBulkListener(storageId);
@@ -106,10 +111,10 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
             storageInfoHelper.setStatusAndSave(storageId, StorageStatus.INDEXING);
             log.debug("[{}] Finish filling index", storageId);
             refreshAsync(storageId);
-        } catch (RuntimeException exc) {
-            log.debug("[{}] Failed to fill index", storageId);
+        } catch (Exception exc) {
             deleteStorage(storageId);
-            throw exc; // TODO: throw more meaningful exception
+            throw new StorageException("Failed to fill storage",
+                    "Failed to fill elastic storage " + storageId, exc);
         }
     }
 
@@ -117,16 +122,14 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         esAsyncClient.indices().refresh(r -> r
                 .index(storageId)
         ).thenRun(() -> {
-            storageInfoHelper.setStatusAndSave(storageId, StorageStatus.READY);
+            storageInfoHelper.setStatusAndSave(storageId, READY);
             log.debug("[{}] Index refreshed and ready for search", storageId);
         });
     }
 
     @Override
     public Stream<JsonNode> getAll(String storageId) {
-        if (!isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage not ready yet");
-        }
+        assertStorageIsReady(storageId);
         try {
             List<Hit<ObjectNode>> initHits = esClient.search(g1 -> g1
                             .index(storageId)
@@ -144,8 +147,9 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                             hits -> nextPage(hits, storageId))
                     .map(this::extractJsonDataFromHits)
                     .flatMap(List::stream);
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            throw new StorageException("Failed to retrieve result",
+                    "Failed to retrieve full result from elastic storage " + storageId, exc);
         }
     }
 
@@ -165,7 +169,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                     ObjectNode.class
             ).hits().hits();
         } catch (IOException exc) {
-            throw new RuntimeException(exc);
+            throw new UncheckedIOException(exc);
         }
     }
 
@@ -181,9 +185,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     @Override
     public Stream<JsonNode> getPage(String storageId, Pageable pageable) {
-        if (!isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage not ready yet");
-        }
+        assertStorageIsReady(storageId);
         try {
             int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
@@ -197,8 +199,9 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
             );
             log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
             return extractHitsAndComposeResult(response);
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            throw new StorageException("Failed to retrieve result",
+                    "Failed to retrieve page result from elastic storage " + storageId, exc);
         }
     }
 
@@ -216,9 +219,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
 
     @Override
     public void delete(String storageId) {
-        if (!isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage not ready yet");
-        }
+        assertStorageIsReady(storageId);
         deleteStorage(storageId);
     }
 
@@ -226,15 +227,17 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         try {
             esClient.indices().delete(d -> d
                     .index(storageId));
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            throw new StorageException("Failed to delete storage",
+                    "Failed to delete elastic storage " + storageId, exc);
         }
     }
 
     @Override
     public JsonNode search(String storageId, String query, Pageable pageable) {
         if (!isSearcherReady(storageId)) {
-            throw new IllegalStateException("Searcher not ready yet");
+            throw new SearcherNotReadyException("Searcher not ready yet",
+                    "Elastic storage %s not ready for search yet".formatted(storageId));
         }
         try {
             int from = (int) pageable.getOffset();
@@ -258,8 +261,9 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                     ObjectNode.class
             );
             return extractHitsWithHighlightsAndComposeResult(response);
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            throw new SearcherException("Failed to perform search request",
+                    "Failed to perform search request in elastic storage " + storageId, exc);
         }
     }
 
@@ -292,25 +296,32 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
         return resultNode;
     }
 
+    @Override
+    public boolean isStorageReady(String storageId) {
+        return isIndexExists(storageId) && storageInfoHelper.hasAnyOfStatuses(storageId, StorageStatus.INDEXING, READY);
+    }
+
+    @Override
+    public boolean isSearcherReady(String storageId) {
+        return isIndexExists(storageId) && storageInfoHelper.hasAnyOfStatuses(storageId, READY);
+    }
+
     private boolean isIndexExists(String indexId) {
         try {
             return esClient.indices().exists(e -> e
                     .index(indexId)
             ).value();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (Exception exc) {
+            throw new StorageException("Failed to check readiness",
+                    "Failed to check elastic storage existence " + indexId, exc);
         }
     }
 
-    @Override
-    public boolean isStorageReady(String storageId) {
-        return isIndexExists(storageId) && storageInfoHelper.hasAnyOfStatuses(storageId,
-                StorageStatus.INDEXING, StorageStatus.READY);
-    }
-
-    @Override
-    public boolean isSearcherReady(String storageId) {
-        return isIndexExists(storageId) && storageInfoHelper.hasAnyOfStatuses(storageId, StorageStatus.READY);
+    private void assertStorageIsReady(String storageId) {
+        if (!isStorageReady(storageId)) {
+            throw new StorageNotReadyException("Storage not ready yet",
+                    "Elastic storage %s not ready yet".formatted(storageId));
+        }
     }
 }
 
