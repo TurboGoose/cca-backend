@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
+import ru.turbogoose.cca.backend.components.storage.exception.EnrichmentException;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -63,7 +64,7 @@ public class JsonEnricher implements AnnotationEnricher {
             generator.writeEndArray();
             generator.flush();
         } catch (IOException exc) {
-            throw new RuntimeException(exc);
+            throw new EnrichmentException("Failed to enrich data", exc);
         }
     }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
+import ru.turbogoose.cca.backend.components.storage.exception.EnrichmentException;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -57,7 +58,7 @@ public class CsvEnricher implements AnnotationEnricher{
             }
             csvPrinter.flush();
         } catch (IOException exc) {
-            throw new RuntimeException(exc);
+            throw new EnrichmentException("Failed to enrich data", exc);
         }
     }
 
