@@ -11,5 +11,4 @@ public class DatasetResponseDto {
     private Long size;
     private Long totalRows;
     private LocalDateTime created;
-    private LocalDateTime lastUpdated;
 }

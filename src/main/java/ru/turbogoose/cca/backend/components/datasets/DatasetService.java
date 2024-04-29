@@ -160,7 +160,6 @@ public class DatasetService {
     public DatasetResponseDto renameDataset(int datasetId, String newName) {
         Dataset dataset = getDatasetByIdOrThrow(datasetId);
         dataset.setName(newName);
-        dataset.setLastUpdated(LocalDateTime.now());
         datasetRepository.save(dataset);
         return mapper.map(dataset, DatasetResponseDto.class);
     }
