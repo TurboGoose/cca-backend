@@ -2,13 +2,18 @@ package ru.turbogoose.cca.backend.common.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.convert.ConversionFailedException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import ru.turbogoose.cca.backend.common.dto.ErrorResponseDto;
-import ru.turbogoose.cca.backend.common.util.Util;
+import ru.turbogoose.cca.backend.common.exception.AlreadyExistsException;
+import ru.turbogoose.cca.backend.common.exception.CustomException;
+import ru.turbogoose.cca.backend.common.exception.NotFoundException;
+import ru.turbogoose.cca.backend.components.storage.exception.EnrichmentException;
+import ru.turbogoose.cca.backend.components.storage.exception.NotReadyException;
+import ru.turbogoose.cca.backend.components.storage.exception.SearcherException;
+import ru.turbogoose.cca.backend.components.storage.exception.StorageException;
 
 @RestControllerAdvice
 @Slf4j
@@ -20,25 +25,39 @@ public class GlobalControllerAdvice {
         return composeErrorResponse(exception.getMessage());
     }
 
-    @ExceptionHandler(IllegalStateException.class)
+    @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponseDto handle(IllegalStateException exception) {
-        log.error("", exception);
-        return composeErrorResponse(exception.getMessage());
+    public ErrorResponseDto handle(NotFoundException exception) {
+        return logAndComposeErrorResponse(exception);
     }
 
-    @ExceptionHandler(DataIntegrityViolationException.class)
+    @ExceptionHandler(NotReadyException.class)
+    @ResponseStatus(HttpStatus.TOO_EARLY)
+    public ErrorResponseDto handle(NotReadyException exception) {
+        return logAndComposeErrorResponse(exception);
+    }
+
+    @ExceptionHandler(AlreadyExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public ErrorResponseDto handle(DataIntegrityViolationException exception) {
-        log.error("", exception);
-        String message = Util.extractFirstPattern("Detail: (.+)\\.", exception.getMessage());
-        return composeErrorResponse(message);
+    public ErrorResponseDto handle(AlreadyExistsException exception) {
+        return logAndComposeErrorResponse(exception);
+    }
+
+    @ExceptionHandler({SearcherException.class, StorageException.class, EnrichmentException.class})
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ErrorResponseDto handle(CustomException exception) {
+        return logAndComposeErrorResponse(exception);
     }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public void handle(Exception exception) {
         log.error("", exception);
+    }
+
+    private ErrorResponseDto logAndComposeErrorResponse(CustomException exception) {
+        log.error("", exception);
+        return composeErrorResponse(exception.getUserMessage());
     }
 
     private ErrorResponseDto composeErrorResponse(String message) {
