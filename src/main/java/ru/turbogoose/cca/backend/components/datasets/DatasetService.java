@@ -146,11 +146,10 @@ public class DatasetService {
     }
 
     @Transactional(readOnly = true)
-    public void getDatasetPage(int datasetId, Pageable pageable, OutputStream out) {
-        Dataset dataset = getDatasetByIdOrThrow(datasetId);
+    public void getDatasetPage(Dataset dataset, Pageable pageable, OutputStream out) {
         StorageInfo storageInfo = getStorageInfo(dataset);
         Storage<?, JsonNode> storage = getActiveStorage(storageInfo.getMode());
-        try (Stream<Annotation> annotationStream = annotationService.getAnnotationsPage(datasetId, pageable);
+        try (Stream<Annotation> annotationStream = annotationService.getAnnotationsPage(dataset.getId(), pageable);
              Stream<JsonNode> dataStream = storage.getPage(storageInfo.getStorageId(), pageable)) {
             AnnotationEnricher enricher = EnricherFactory.getJsonEnricher(pageable.getOffset());
             enricher.enrichAndWrite(dataStream, annotationStream, out);
