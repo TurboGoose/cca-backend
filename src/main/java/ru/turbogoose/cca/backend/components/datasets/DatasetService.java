@@ -5,14 +5,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
 import org.modelmapper.ModelMapper;
-import org.springframework.aop.framework.AopContext;
-import org.springframework.core.task.TaskExecutor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import ru.turbogoose.cca.backend.common.exception.AlreadyExistsException;
+import ru.turbogoose.cca.backend.common.exception.NotFoundException;
 import ru.turbogoose.cca.backend.common.util.CsvUtil;
 import ru.turbogoose.cca.backend.common.util.LongCounter;
 import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
@@ -25,12 +25,15 @@ import ru.turbogoose.cca.backend.components.storage.Searcher;
 import ru.turbogoose.cca.backend.components.storage.Storage;
 import ru.turbogoose.cca.backend.components.storage.enricher.AnnotationEnricher;
 import ru.turbogoose.cca.backend.components.storage.enricher.EnricherFactory;
+import ru.turbogoose.cca.backend.components.storage.exception.StorageException;
+import ru.turbogoose.cca.backend.components.storage.exception.NotReadyException;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 import ru.turbogoose.cca.backend.components.storage.info.StorageMode;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -68,20 +71,21 @@ public class DatasetService {
         }
     }
 
-    private Dataset composeDatasetFromFile(MultipartFile file) {
+    public DatasetResponseDto uploadDataset(MultipartFile file) {
         validateDatasetFileExtension(file.getOriginalFilename());
         String datasetName = removeExtension(file.getOriginalFilename());
         Dataset dataset = new Dataset();
         dataset.setName(datasetName);
         dataset.setSize(file.getSize());
         dataset.setCreated(LocalDateTime.now());
-        return dataset;
-    }
 
-    public DatasetResponseDto uploadDataset(MultipartFile file) {
-        Dataset dataset = datasetRepository.save(composeDatasetFromFile(file)); // integrity violation on duplicate
-        log.debug("[{}] dataset metadata saved into db", dataset.getId());
-
+        try {
+            dataset = datasetRepository.save(dataset);
+            log.debug("[{}] dataset metadata saved into db", dataset.getId());
+        } catch (DataIntegrityViolationException exc) {
+            throw new AlreadyExistsException("Dataset with this name already exists",
+                    "Dataset with name %s already exists".formatted(datasetName), exc);
+        }
         String secondaryId = secondaryStorage.create();
         StorageInfo secondaryInfo = storageInfoHelper.getInfoByStorageIdOrThrow(secondaryId);
         secondaryInfo.setMode(StorageMode.SECONDARY);
@@ -100,17 +104,18 @@ public class DatasetService {
             dataset.setTotalRows(rowCounter.get());
             datasetRepository.save(dataset);
 
-            taskExecutor.execute(() -> migrateSecondaryStorageToPrimary(dataset, secondaryInfo));
+            final Dataset finalDataset = dataset;
+            taskExecutor.execute(() -> migrateSecondaryStorageToPrimary(finalDataset, secondaryInfo));
             return mapper.map(dataset, DatasetResponseDto.class);
 
-        } catch (RuntimeException exc) { // TODO: storage filling exception here
+        } catch (StorageException exc) {
             dataset.removeStorage(secondaryInfo);
             datasetRepository.save(dataset);
             log.debug("[{}] secondary storage deleted due to a filling error", dataset.getId());
-            throw new RuntimeException("Failed to fill secondary storage", exc);
-        }
-        catch (IOException exc) {
-            throw new RuntimeException(exc);
+            throw exc;
+
+        } catch (IOException exc) {
+            throw new UncheckedIOException(exc);
         }
     }
 
@@ -126,6 +131,11 @@ public class DatasetService {
         try (Stream<JsonNode> dataStream = secondaryStorage.getAll(secondaryId)) {
             primaryStorage.fill(primaryId, dataStream); // potentially long task
             log.debug("[{}] data migrated to primary storage", dataset.getId());
+        } catch (StorageException exc) {
+            dataset.removeStorage(primaryInfo);
+            datasetRepository.save(dataset);
+            log.debug("[{}] primary storage deleted due to a filling error", dataset.getId());
+            throw exc;
         }
 
         storageInfoHelper.updateStatus(primaryInfo);
@@ -139,7 +149,7 @@ public class DatasetService {
     public void getDatasetPage(int datasetId, Pageable pageable, OutputStream out) {
         Dataset dataset = getDatasetByIdOrThrow(datasetId);
         StorageInfo storageInfo = getStorageInfo(dataset);
-        Storage<?, JsonNode> storage = getStorage(storageInfo.getMode());
+        Storage<?, JsonNode> storage = getActiveStorage(storageInfo.getMode());
         try (Stream<Annotation> annotationStream = annotationService.getAnnotationsPage(datasetId, pageable);
              Stream<JsonNode> dataStream = storage.getPage(storageInfo.getStorageId(), pageable)) {
             AnnotationEnricher enricher = EnricherFactory.getJsonEnricher(pageable.getOffset());
@@ -160,7 +170,7 @@ public class DatasetService {
     public void deleteDataset(int datasetId) {
         Dataset dataset = getDatasetByIdOrThrow(datasetId);
         for (StorageInfo storage : dataset.getStorages()) {
-            getStorage(storage.getMode()).delete(storage.getStorageId());
+            getActiveStorage(storage.getMode()).delete(storage.getStorageId());
         }
         datasetRepository.delete(dataset);
     }
@@ -168,7 +178,7 @@ public class DatasetService {
     @Transactional(readOnly = true)
     public void downloadDataset(Dataset dataset, FileExtension fileExtension, OutputStream out) {
         StorageInfo storageInfo = getStorageInfo(dataset);
-        Storage<?, JsonNode> storage = getStorage(storageInfo.getMode());
+        Storage<?, JsonNode> storage = getActiveStorage(storageInfo.getMode());
         try (Stream<Annotation> annotationStream = annotationService.getAllAnnotations(dataset.getId());
              Stream<JsonNode> dataStream = storage.getAll(storageInfo.getStorageId())) {
             AnnotationEnricher enricher = EnricherFactory.getEnricher(fileExtension);
@@ -179,7 +189,7 @@ public class DatasetService {
     public SearchReadinessResponseDto isReadyForSearch(int datasetId) {
         Dataset dataset = getDatasetByIdOrThrow(datasetId);
         StorageInfo storageInfo = getStorageInfo(dataset);
-        validateDatasetInPrimaryStorage(storageInfo);
+        assertActiveStorageIsSearcher(storageInfo);
         return SearchReadinessResponseDto.builder()
                 .isReadyForSearch(searcher.isSearcherReady(storageInfo.getStorageId()))
                 .build();
@@ -188,32 +198,35 @@ public class DatasetService {
     public JsonNode search(int datasetId, String query, Pageable pageable) {
         Dataset dataset = getDatasetByIdOrThrow(datasetId);
         StorageInfo storageInfo = getStorageInfo(dataset);
-        validateDatasetInPrimaryStorage(storageInfo);
-        if (!searcher.isSearcherReady(storageInfo.getStorageId())) {
-            throw new IllegalStateException("Searcher not ready yet");
-        }
+        assertActiveStorageIsSearcher(storageInfo);
         return searcher.search(storageInfo.getStorageId(), query, pageable);
     }
 
-    private void validateDatasetInPrimaryStorage(StorageInfo storageInfo) {
-        if (storageInfo.getMode() != StorageMode.PRIMARY) {
-            throw new IllegalStateException("Dataset not in primary storage yet");
+    public boolean isDatasetExists(int datasetId) {
+        return datasetRepository.existsById(datasetId);
+    }
+
+    private void assertActiveStorageIsSearcher(StorageInfo storageInfo) {
+        Storage<?, JsonNode> activeStorage = getActiveStorage(storageInfo.getMode());
+        if (activeStorage != searcher) {
+            throw new NotReadyException("Storage not ready for search yet",
+                    "Currently active storage %s does not support search".formatted(activeStorage.getClass().getName()));
         }
     }
 
     public Dataset getDatasetByIdOrThrow(int datasetId) {
         return datasetRepository.findById(datasetId)
-                .orElseThrow(() -> new IllegalStateException("Dataset with id{" + datasetId + "} not found"));
+                .orElseThrow(() -> new NotFoundException("Dataset with id %s not found".formatted(datasetId)));
     }
 
     private StorageInfo getStorageInfo(Dataset dataset) {
         return dataset.getStorages().stream()
                 .filter(info -> storageInfoHelper.hasAnyOfStatuses(info, INDEXING, READY))
                 .min(Comparator.comparing(StorageInfo::getMode))
-                .orElseThrow(() -> new IllegalStateException("No storage available for dataset " + dataset.getId()));
+                .orElseThrow(() -> new StorageException("", "No storage available for dataset " + dataset.getId()));
     }
 
-    private Storage<?, JsonNode> getStorage(StorageMode mode) {
+    private Storage<?, JsonNode> getActiveStorage(StorageMode mode) {
         return switch (mode) {
             case PRIMARY -> primaryStorage;
             case SECONDARY -> secondaryStorage;
