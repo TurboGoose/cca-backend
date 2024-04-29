@@ -1,7 +1,10 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import ru.turbogoose.cca.backend.components.labels.Label;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 

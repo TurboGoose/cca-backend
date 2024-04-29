@@ -12,7 +12,8 @@ import ru.turbogoose.cca.backend.components.storage.Storage;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
