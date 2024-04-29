@@ -20,7 +20,7 @@ public class CsvUtil {
         try {
             return transferToCsvStream(new FileInputStream(storagePath));
         } catch (IOException exc) {
-            throw new RuntimeException(exc);
+            throw new UncheckedIOException(exc);
         }
     }
 
@@ -34,7 +34,7 @@ public class CsvUtil {
             CSVParser parser = csvFormat.parse(in);
             return parser.stream();
         } catch (IOException exc) {
-            throw new RuntimeException(exc);
+            throw new UncheckedIOException(exc);
         }
     }
 
@@ -57,7 +57,7 @@ public class CsvUtil {
                 }
             }
         } catch (IOException exc) {
-            throw new RuntimeException(exc);
+            throw new UncheckedIOException(exc);
         }
     }
 

@@ -9,6 +9,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import ru.turbogoose.cca.backend.common.util.CsvUtil;
 import ru.turbogoose.cca.backend.components.storage.Storage;
+import ru.turbogoose.cca.backend.components.storage.exception.StorageAlreadyExistsException;
+import ru.turbogoose.cca.backend.components.storage.exception.StorageException;
+import ru.turbogoose.cca.backend.components.storage.exception.StorageNotReadyException;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 
@@ -43,8 +46,9 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
             this.rootFolderPath = rootFolderPath != null
                     ? Files.createDirectories(Path.of(rootFolderPath))
                     : Files.createTempDirectory(null);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (IOException exc) {
+            throw new StorageException("Failed to instantiate storage",
+                    "Failed to create temp folder %s for FS storage".formatted(rootFolderPath), exc);
         }
     }
 
@@ -58,15 +62,17 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
                     .build();
             storageInfoHelper.getStorageInfoRepository().save(info);
             return storageId;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (Exception exc) {
+            throw new StorageException("Failed to create storage",
+                    "Failed to create FS storage", exc);
         }
     }
 
     @Override
     public void fill(String storageId, Stream<CSVRecord> in) {
         if (isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage already exists and filled");
+            throw new StorageAlreadyExistsException("Storage already exists and filled",
+                    "FS storage %s already exists and filled".formatted(storageId));
         }
         storageInfoHelper.setStatusAndSave(storageId, LOADING);
         try (in) {
@@ -74,7 +80,8 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
             storageInfoHelper.setStatusAndSave(storageId, READY);
         } catch (Exception exc) {
             deleteStorage(storageId);
-            throw new RuntimeException(); // TODO: replace for more meaningful exception
+            throw new StorageException("Failed to fill storage",
+                    "Failed to fill FS storage " + storageId, exc);
         }
     }
 
@@ -83,9 +90,7 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
      */
     @Override
     public Stream<JsonNode> getAll(String storageId) {
-        if (!isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage not ready yet");
-        }
+        assertStorageIsReady(storageId);
         return CsvUtil.readCsvStreamFromFile(storageId)
                 .map(CsvUtil::csvRecordToJsonNode);
     }
@@ -95,9 +100,8 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
      */
     @Override
     public Stream<JsonNode> getPage(String storageId, Pageable pageable) {
-        if (!isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage not ready yet");
-        }
+
+        assertStorageIsReady(storageId);
         long offset = pageable.getOffset();
         int size = pageable.getPageSize();
         return CsvUtil.readCsvStreamFromFile(storageId)
@@ -108,22 +112,28 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
 
     @Override
     public void delete(String storageId) {
-        if (!isStorageReady(storageId)) {
-            throw new IllegalStateException("Storage not ready yet");
-        }
+        assertStorageIsReady(storageId);
         deleteStorage(storageId);
     }
 
     private void deleteStorage(String storageId) {
         try {
             Files.deleteIfExists(Path.of(storageId));
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            throw new StorageException("Failed to delete storage",
+                    "Failed to delete FS storage " + storageId, exc);
         }
     }
 
     @Override
     public boolean isStorageReady(String storageId) {
         return Files.exists(Path.of(storageId)) && storageInfoHelper.hasAnyOfStatuses(storageId, READY);
+    }
+
+    private void assertStorageIsReady(String storageId) {
+        if (!isStorageReady(storageId)) {
+            throw new StorageNotReadyException("Storage not ready yet",
+                    "FS storage %s not ready yet".formatted(storageId));
+        }
     }
 }
