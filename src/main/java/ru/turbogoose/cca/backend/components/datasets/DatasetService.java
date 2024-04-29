@@ -5,8 +5,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
 import org.modelmapper.ModelMapper;
+import org.springframework.aop.framework.AopContext;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -48,6 +51,7 @@ public class DatasetService {
     private final Storage<JsonNode, JsonNode> primaryStorage;
     private final Storage<CSVRecord, JsonNode> secondaryStorage;
     private final StorageInfoHelper storageInfoHelper;
+    private final ThreadPoolTaskExecutor taskExecutor;
 
     public DatasetListResponseDto getAllDatasets() {
         List<DatasetResponseDto> datasets = datasetRepository.findAll().stream()
@@ -96,7 +100,7 @@ public class DatasetService {
             dataset.setTotalRows(rowCounter.get());
             datasetRepository.save(dataset);
 
-            migrateSecondaryStorageToPrimary(dataset, secondaryInfo);
+            taskExecutor.execute(() -> migrateSecondaryStorageToPrimary(dataset, secondaryInfo));
             return mapper.map(dataset, DatasetResponseDto.class);
 
         } catch (RuntimeException exc) { // TODO: storage filling exception here
@@ -104,15 +108,13 @@ public class DatasetService {
             datasetRepository.save(dataset);
             log.debug("[{}] secondary storage deleted due to a filling error", dataset.getId());
             throw new RuntimeException("Failed to fill secondary storage", exc);
-
         }
         catch (IOException exc) {
             throw new RuntimeException(exc);
         }
     }
 
-    @Async
-    protected void migrateSecondaryStorageToPrimary(Dataset dataset, StorageInfo secondaryInfo) {
+    private void migrateSecondaryStorageToPrimary(Dataset dataset, StorageInfo secondaryInfo) {
         String secondaryId = secondaryInfo.getStorageId();
         String primaryId = primaryStorage.create();
         StorageInfo primaryInfo = storageInfoHelper.getInfoByStorageIdOrThrow(primaryId);
