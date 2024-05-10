@@ -4,6 +4,7 @@ services:
   backend:
     build: .
     environment:
+      TZ: Europe/Moscow
       SPRING_PROFILES_ACTIVE: test
       TEMP_FILESYSTEM_STORAGE: /tmp/cca-backend
     volumes:
@@ -19,6 +20,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data/
     environment:
+      TZ: Europe/Moscow
       POSTGRES_DB: cca-test-db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: bebrapostgres
@@ -29,6 +31,7 @@ services:
   elastic:
     image: elasticsearch:8.13.0
     environment:
+      - TZ=Europe/Moscow
       - discovery.type=single-node
       - xpack.security.enabled=false
     ulimits:
