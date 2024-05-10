@@ -255,8 +255,8 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                             .highlight(h -> h
                                     .encoder(HighlighterEncoder.Html)
                                     .numberOfFragments(0)
-                                    .preTags("<em class=\"hlt\">")
-                                    .postTags("</em>")
+                                    .preTags("<mark class=\"hlt\">")
+                                    .postTags("</mark>")
                                     .type(HighlighterType.Plain)
                                     .fields(
                                             "*", hf -> hf)),
