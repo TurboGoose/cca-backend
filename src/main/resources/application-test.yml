@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    username: postgres
+    password: bebrapostgres
+    url: jdbc:postgresql://postgres:5432/cca-test-db
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 5GB
+      max-request-size: 5GB
+
+logging:
+  level:
+    ru:
+      turbogoose:
+        cca:
+          backend: info
+
+elasticsearch:
+  datasource:
+    host: elastic
+    port: 9200
+  query:
+    timeout: 30s
+  max-concurrent-requests: 2
+
+storage:
+  fstmp:
+    folder: ${TEMP_FILESYSTEM_STORAGE}

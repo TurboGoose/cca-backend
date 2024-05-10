@@ -8,15 +8,25 @@ spring:
       hibernate:
         show_sql: true
         format_sql: true
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: create
   flyway:
     enabled: false
   servlet:
     multipart:
-      max-file-size: 1GB
-      max-request-size: 1GB
+      max-file-size: -1
+      max-request-size: -1
+#  sql:
+#    init:
+#      mode: always
 
+logging:
+  level:
+    ru:
+      turbogoose:
+        cca:
+          backend: debug
 
 elasticsearch:
   datasource:
@@ -27,3 +37,9 @@ elasticsearch:
     password: ${ELASTIC_PASSWORD}
   query:
     timeout: 30s
+
+  max-concurrent-requests: 2
+
+storage:
+  fstmp:
+    folder: "/Users/ilakonovalov/IdeaProjects/cca-backend/tmpstorage"

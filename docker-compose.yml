@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  backend:
+    build: .
+    environment:
+      SPRING_PROFILES_ACTIVE: test
+      TEMP_FILESYSTEM_STORAGE: /tmp/cca-backend
+    volumes:
+      - fsdata:/tmp/cca-backend
+    ports:
+      - "8080:8080"
+    restart: always
+    networks:
+      - esnet
+
+  postgres:
+    image: postgres:15
+    volumes:
+      - pgdata:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: cca-test-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: bebrapostgres
+    restart: always
+    networks:
+      - esnet
+
+  elastic:
+    image: elasticsearch:8.13.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    networks:
+      - esnet
+
+volumes:
+  esdata:
+    driver: local
+  pgdata:
+    driver: local
+  fsdata:
+    driver: local
+
+networks:
+  esnet:
+    driver: bridge

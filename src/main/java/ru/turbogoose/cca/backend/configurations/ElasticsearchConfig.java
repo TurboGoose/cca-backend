@@ -25,24 +25,24 @@ public class ElasticsearchConfig {
     @Value("${elasticsearch.datasource.host}")
     private String host;
 
-    @Value("${elasticsearch.datasource.fingerprint}")
-    private String fingerprint;
-
-    @Value("${elasticsearch.datasource.username}")
-    private String username;
-
-    @Value("${elasticsearch.datasource.password}")
-    private String password;
+//    @Value("${elasticsearch.datasource.fingerprint}")
+//    private String fingerprint;
+//
+//    @Value("${elasticsearch.datasource.username}")
+//    private String username;
+//
+//    @Value("${elasticsearch.datasource.password}")
+//    private String password;
 
     @Bean
     public ElasticsearchTransport elasticsearchTransport() {
-        SSLContext sslContext = TransportUtils
-                .sslContextFromCaFingerprint(fingerprint);
-
-        BasicCredentialsProvider credsProv = new BasicCredentialsProvider();
-        credsProv.setCredentials(
-                AuthScope.ANY, new UsernamePasswordCredentials(username, password)
-        );
+//        SSLContext sslContext = TransportUtils
+//                .sslContextFromCaFingerprint(fingerprint);
+//
+//        BasicCredentialsProvider credsProv = new BasicCredentialsProvider();
+//        credsProv.setCredentials(
+//                AuthScope.ANY, new UsernamePasswordCredentials(username, password)
+//        );
 
         RestClient restClient = RestClient
                 .builder(new HttpHost(host, port, "http"))
