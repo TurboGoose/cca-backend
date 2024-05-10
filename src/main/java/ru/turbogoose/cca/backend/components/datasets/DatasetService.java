@@ -18,7 +18,6 @@ import ru.turbogoose.cca.backend.common.util.CsvUtil;
 import ru.turbogoose.cca.backend.common.util.LongCounter;
 import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
-import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetTableInfoResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.SearchReadinessResponseDto;
@@ -59,13 +58,10 @@ public class DatasetService {
     private final StorageInfoHelper storageInfoHelper;
     private final ThreadPoolTaskExecutor taskExecutor;
 
-    public DatasetListResponseDto getAllDatasets() {
-        List<DatasetResponseDto> datasets = datasetRepository.findAll().stream()
+    public List<DatasetResponseDto> getAllDatasets() {
+        return datasetRepository.findAll().stream()
                 .map(dataset -> mapper.map(dataset, DatasetResponseDto.class))
                 .toList();
-        return DatasetListResponseDto.builder()
-                .datasets(datasets)
-                .build();
     }
 
     private void validateDatasetFileExtension(String filename) {

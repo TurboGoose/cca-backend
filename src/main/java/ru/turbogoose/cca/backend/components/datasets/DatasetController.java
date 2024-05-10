@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
 import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
-import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetTableInfoResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.SearchReadinessResponseDto;
@@ -17,6 +16,7 @@ import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
@@ -27,7 +27,7 @@ public class DatasetController {
     private final AnnotationService annotationService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public DatasetListResponseDto getAllDatasets() {
+    public List<DatasetResponseDto> getAllDatasets() {
         return datasetService.getAllDatasets();
     }
 
