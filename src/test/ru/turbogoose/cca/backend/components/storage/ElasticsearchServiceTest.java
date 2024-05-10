@@ -1,21 +1,5 @@
 package ru.turbogoose.cca.backend.components.storage;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
-import co.elastic.clients.transport.ElasticsearchTransport;
-import co.elastic.clients.transport.TransportUtils;
-import co.elastic.clients.transport.rest_client.RestClientTransport;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.http.HttpHost;
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.elasticsearch.client.RestClient;
-import org.junit.jupiter.api.Test;
-
-import javax.net.ssl.SSLContext;
-import java.util.Map;
-
 class ElasticsearchServiceTest {
 //    private static final Integer port = 9200;
 //    private static final String host = "localhost";
@@ -44,16 +28,15 @@ class ElasticsearchServiceTest {
 //        return new ElasticsearchClient(transport);
 //    }
 //
-//    public static Searcher service = new ElasticsearchService(initElasticsearchClient(), new ObjectMapper());
+//    public static Storage<JsonNode, JsonNode> service = new ElasticsearchService(initElasticsearchClient());
 //
 //    @Test
 //    public void runBenchmarks() {
-//        Map<String, Integer> runsByDatasets = Map.of(
-////                "/Users/ilakonovalov/PycharmProjects/archive/dataset_1mb.csv", 3
-////                ,"/Users/ilakonovalov/PycharmProjects/archive/dataset_10mb.csv", 3
-//                "/Users/ilakonovalov/PycharmProjects/archive/dataset_100mb.csv", 1
-////                ,"/Users/ilakonovalov/PycharmProjects/archive/dataset_500mb.csv", 1
-//        );
+//        Map<String, Integer> runsByDatasets = new LinkedHashMap<>();
+//        runsByDatasets.put("/Users/ilakonovalov/PycharmProjects/archive/dataset_1mb.csv", 3);
+//        runsByDatasets.put("/Users/ilakonovalov/PycharmProjects/archive/dataset_10mb.csv", 3);
+////        runsByDatasets.put("/Users/ilakonovalov/PycharmProjects/archive/dataset_100mb.csv", 1);
+////        runsByDatasets.put("/Users/ilakonovalov/PycharmProjects/archive/dataset_500mb.csv", 1);
 //
 //        runsByDatasets.forEach(this::runBenchMark);
 //    }
@@ -61,22 +44,21 @@ class ElasticsearchServiceTest {
 //    public void runBenchMark(String datasetFilename, int runs) {
 //        long totalTime = 0;
 //        for (int run = 0; run < runs; run++) {
-//            try (InputStream in = new FileInputStream(datasetFilename)) {
-//                String indexName = "test_index_" + Util.removeExtension(Path.of(datasetFilename).getFileName().toString());
-//                System.out.println("Start creating index " + indexName);
+//            Path path = Path.of(datasetFilename);
+//            InternalStorageInfo info = service.create();
+//            System.out.println("Start testing dataset " + path);
+//
+//            try (Stream<JsonNode> dataStream = CsvUtil.readCsvAsJson(path)) {
 //                long start = System.currentTimeMillis();
-//                service.createIndex(indexName, FileConversionUtil.readCsvDatasetToJson(in));
+//                service.fill(info, dataStream);
 //                long result = System.currentTimeMillis() - start;
 //                totalTime += result;
 //                System.out.printf("%d) Elapsed indexing time for dataset '%s': %d%n", run, datasetFilename, result);
-//                service.deleteIndex(indexName);
-//            } catch (IOException exc) {
-//                throw new RuntimeException(exc);
+//                service.delete(info);
 //            }
 //        }
 //        System.out.println("Average indexing time: " + totalTime / runs);
 //        System.out.println("---------------------------------------------");
 //
 //    }
-
 }

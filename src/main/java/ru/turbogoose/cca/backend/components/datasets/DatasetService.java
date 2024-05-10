@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
 import org.modelmapper.ModelMapper;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetListResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
+import ru.turbogoose.cca.backend.components.datasets.dto.DatasetTableInfoResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.SearchReadinessResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.util.FileExtension;
 import ru.turbogoose.cca.backend.components.storage.Searcher;
@@ -35,6 +37,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -190,6 +193,22 @@ public class DatasetService {
         assertActiveStorageIsSearcher(storageInfo);
         return SearchReadinessResponseDto.builder()
                 .isReadyForSearch(searcher.isSearcherReady(storageInfo.getStorageId()))
+                .build();
+    }
+
+    public DatasetTableInfoResponseDto getDatasetRenderInfo(int datasetId) {
+        Dataset dataset = getDatasetByIdOrThrow(datasetId);
+        StorageInfo storageInfo = getStorageInfo(dataset);
+        Storage<?, JsonNode> storage = getActiveStorage(storageInfo.getMode());
+        List<String> headers = new ArrayList<>();
+        headers.add("labels");
+        try (Stream<JsonNode> dataStream = storage.getPage(storageInfo.getStorageId(), PageRequest.of(0, 1))) {
+            JsonNode node = dataStream.findFirst().orElseThrow();
+            node.fieldNames().forEachRemaining(headers::add);
+        }
+        return DatasetTableInfoResponseDto.builder()
+                .totalRows(dataset.getTotalRows())
+                .headers(headers)
                 .build();
     }
 

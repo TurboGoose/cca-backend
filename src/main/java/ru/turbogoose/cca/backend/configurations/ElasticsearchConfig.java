@@ -1,5 +1,6 @@
 package ru.turbogoose.cca.backend.configurations;
 
+import co.elastic.clients.elasticsearch.ElasticsearchAsyncClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.ElasticsearchTransport;
@@ -34,7 +35,7 @@ public class ElasticsearchConfig {
     private String password;
 
     @Bean
-    public ElasticsearchClient elasticsearchClient() {
+    public ElasticsearchTransport elasticsearchTransport() {
         SSLContext sslContext = TransportUtils
                 .sslContextFromCaFingerprint(fingerprint);
 
@@ -44,14 +45,24 @@ public class ElasticsearchConfig {
         );
 
         RestClient restClient = RestClient
-                .builder(new HttpHost(host, port, "https"))
-                .setHttpClientConfigCallback(hc -> hc
-                        .setSSLContext(sslContext)
-                        .setDefaultCredentialsProvider(credsProv)
-                )
+                .builder(new HttpHost(host, port, "http"))
+//                .builder(new HttpHost(host, port, "https"))
+//                .setHttpClientConfigCallback(hc -> hc
+//                        .setSSLContext(sslContext)
+//                        .setDefaultCredentialsProvider(credsProv)
+//                )
                 .build();
 
-        ElasticsearchTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
+        return new RestClientTransport(restClient, new JacksonJsonpMapper());
+    }
+
+    @Bean
+    public ElasticsearchClient elasticsearchClient(ElasticsearchTransport transport) {
         return new ElasticsearchClient(transport);
+    }
+
+    @Bean
+    public ElasticsearchAsyncClient elasticsearchAsyncClient(ElasticsearchTransport transport) {
+        return new ElasticsearchAsyncClient(transport);
     }
 }
