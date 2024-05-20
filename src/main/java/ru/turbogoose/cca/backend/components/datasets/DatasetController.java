@@ -8,7 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ru.turbogoose.cca.backend.components.annotations.AnnotationService;
-import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
+import ru.turbogoose.cca.backend.components.annotations.dto.AnnotationDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.DatasetTableInfoResponseDto;
 import ru.turbogoose.cca.backend.components.datasets.dto.SearchReadinessResponseDto;
@@ -60,7 +60,7 @@ public class DatasetController {
     }
 
     @PutMapping( "/{id}")
-    public void annotate(@RequestBody AnnotateRequestDto annotateDto) {
+    public void annotate(@RequestBody List<AnnotationDto> annotateDto) {
         annotationService.annotate(annotateDto);
     }
 

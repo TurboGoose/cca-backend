@@ -5,7 +5,6 @@ import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.turbogoose.cca.backend.components.annotations.dto.AnnotateRequestDto;
 import ru.turbogoose.cca.backend.components.annotations.dto.AnnotationDto;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
 import ru.turbogoose.cca.backend.components.annotations.model.AnnotationId;
@@ -23,10 +22,10 @@ public class AnnotationService {
     private final ModelMapper mapper;
 
     @Transactional
-    public void annotate(AnnotateRequestDto annotateDto) {
+    public void annotate(List<AnnotationDto> annotationsDto) {
         List<Annotation> annotationsToAdd = new LinkedList<>();
         List<AnnotationId> annotationIdsToDelete = new LinkedList<>();
-        for (AnnotationDto annotation : annotateDto.getAnnotations()) {
+        for (AnnotationDto annotation : annotationsDto) {
             AnnotationId annotationId = mapper.map(annotation, AnnotationId.class);
             if (annotation.getAdded()) {
                 annotationsToAdd.add(Annotation.builder()
