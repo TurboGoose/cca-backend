@@ -3,7 +3,6 @@ package ru.turbogoose.cca.backend.components.labels;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 
 import java.util.List;
 

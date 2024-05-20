@@ -1,4 +1,4 @@
-package ru.turbogoose.cca.backend.components.labels.dto;
+package ru.turbogoose.cca.backend.components.labels;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -6,7 +6,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class LabelResponseDto {

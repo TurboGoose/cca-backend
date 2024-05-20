@@ -11,6 +11,6 @@ public class EnricherFactory {
     }
 
     public static AnnotationEnricher getJsonEnricher(long offset) {
-        return new JsonEnricher(offset);
+        return new JsonEnricher(offset, true);
     }
 }

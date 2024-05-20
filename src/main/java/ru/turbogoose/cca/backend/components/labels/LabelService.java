@@ -9,7 +9,6 @@ import ru.turbogoose.cca.backend.common.exception.AlreadyExistsException;
 import ru.turbogoose.cca.backend.common.exception.NotFoundException;
 import ru.turbogoose.cca.backend.components.datasets.Dataset;
 import ru.turbogoose.cca.backend.components.datasets.DatasetService;
-import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 
 import java.util.List;
 
