@@ -3,8 +3,9 @@ package ru.turbogoose.cca.backend.components.labels;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import ru.turbogoose.cca.backend.components.labels.dto.LabelListResponseDto;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
+
+import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
@@ -14,7 +15,7 @@ public class LabelController {
     private final LabelService labelService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public LabelListResponseDto getLabelsListForDataset(@PathVariable int datasetId) {
+    public List<LabelResponseDto> getLabelsListForDataset(@PathVariable int datasetId) {
         return labelService.getLabelListForDataset(datasetId);
     }
 

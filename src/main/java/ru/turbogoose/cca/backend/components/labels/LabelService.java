@@ -9,7 +9,6 @@ import ru.turbogoose.cca.backend.common.exception.AlreadyExistsException;
 import ru.turbogoose.cca.backend.common.exception.NotFoundException;
 import ru.turbogoose.cca.backend.components.datasets.Dataset;
 import ru.turbogoose.cca.backend.components.datasets.DatasetService;
-import ru.turbogoose.cca.backend.components.labels.dto.LabelListResponseDto;
 import ru.turbogoose.cca.backend.components.labels.dto.LabelResponseDto;
 
 import java.util.List;
@@ -21,17 +20,14 @@ public class LabelService {
     private final DatasetService datasetService;
     private final ModelMapper mapper;
 
-    public LabelListResponseDto getLabelListForDataset(int datasetId) {
+    public List<LabelResponseDto> getLabelListForDataset(int datasetId) {
         if (!datasetService.isDatasetExists(datasetId)) {
             throw new NotFoundException("Dataset with this id not exists",
                     "Dataset with this id %s not exists".formatted(datasetId));
         }
-        List<LabelResponseDto> labels = labelRepository.findAllByDatasetId(datasetId).stream()
+        return labelRepository.findAllByDatasetId(datasetId).stream()
                 .map(label -> mapper.map(label, LabelResponseDto.class))
                 .toList();
-        return LabelListResponseDto.builder()
-                .labels(labels)
-                .build();
     }
 
     @Transactional
