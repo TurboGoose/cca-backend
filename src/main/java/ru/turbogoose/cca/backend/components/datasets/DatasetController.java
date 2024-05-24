@@ -49,6 +49,11 @@ public class DatasetController {
         return datasetService.getDatasetRenderInfo(id);
     }
 
+    @PutMapping(value = "/{id}/table-info")
+    public void updateTableInfo(@PathVariable int id, @RequestBody String jsonTableInfo) {
+        datasetService.updateDatasetRenderInfo(id, jsonTableInfo);
+    }
+
     @PatchMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public DatasetResponseDto renameDataset(@PathVariable int id, @RequestParam String newName) {
         return datasetService.renameDataset(id, newName);

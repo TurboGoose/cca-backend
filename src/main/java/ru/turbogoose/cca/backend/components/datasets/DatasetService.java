@@ -1,6 +1,9 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
@@ -49,6 +52,7 @@ import static ru.turbogoose.cca.backend.components.storage.info.StorageStatus.RE
 @Slf4j
 @RequiredArgsConstructor
 public class DatasetService {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     private final ModelMapper mapper;
     private final DatasetRepository datasetRepository;
     private final AnnotationService annotationService;
@@ -193,19 +197,50 @@ public class DatasetService {
     }
 
     public DatasetTableInfoResponseDto getDatasetRenderInfo(int datasetId) {
+        try {
+            Dataset dataset = getDatasetByIdOrThrow(datasetId);
+            String headersInfo = dataset.getHeadersInfo();
+            if (headersInfo == null) {
+                ObjectNode headersInfoNode = objectMapper.createObjectNode();
+                headersInfoNode.putArray("excluded");
+                ArrayNode included = headersInfoNode.putArray("included");
+                included.add(composeFieldInfo("labels"));
+                getFieldNames(dataset).forEach(fieldName -> included.add(composeFieldInfo(fieldName)));
+                headersInfo = headersInfoNode.toString();
+                dataset.setHeadersInfo(headersInfo);
+                datasetRepository.save(dataset);
+            }
+            return DatasetTableInfoResponseDto.builder()
+                    .totalRows(dataset.getTotalRows())
+                    .headers(objectMapper.readTree(headersInfo))
+                    .build();
+        } catch (Exception exc) {
+            throw new RuntimeException(exc);
+        }
+    }
+
+    public void updateDatasetRenderInfo(int datasetId, String jsonTableInfo) {
         Dataset dataset = getDatasetByIdOrThrow(datasetId);
+        dataset.setHeadersInfo(jsonTableInfo);
+        datasetRepository.save(dataset);
+    }
+
+    private JsonNode composeFieldInfo(String fieldName) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("name", fieldName);
+        node.put("width", "0");
+        return node;
+    }
+
+    private List<String> getFieldNames(Dataset dataset) {
         StorageInfo storageInfo = getStorageInfo(dataset);
         Storage<?, JsonNode> storage = getActiveStorage(storageInfo.getMode());
         List<String> headers = new ArrayList<>();
-        headers.add("labels");
         try (Stream<JsonNode> dataStream = storage.getPage(storageInfo.getStorageId(), PageRequest.of(0, 1))) {
             JsonNode node = dataStream.findFirst().orElseThrow();
             node.fieldNames().forEachRemaining(headers::add);
         }
-        return DatasetTableInfoResponseDto.builder()
-                .totalRows(dataset.getTotalRows())
-                .headers(headers)
-                .build();
+        return headers;
     }
 
     public JsonNode search(int datasetId, String query, Pageable pageable) {
