@@ -9,7 +9,7 @@ import ru.turbogoose.cca.backend.components.annotations.model.AnnotationId;
 import java.util.stream.Stream;
 
 public interface AnnotationRepository extends JpaRepository<Annotation, AnnotationId> {
-    @Query("select a from Annotation a where a.label.dataset.id = :datasetId and a.id.rowNum between :from and :to")
+    @Query("select a from Annotation a where a.label.dataset.id = :datasetId and a.id.rowNum between :from and :to order by a.id.rowNum")
     Stream<Annotation> findAnnotationsByDatasetIdAndRowNumBetween(@Param("datasetId") int datasetId,
                                                                   @Param("from") long from,
                                                                   @Param("to") long to);
