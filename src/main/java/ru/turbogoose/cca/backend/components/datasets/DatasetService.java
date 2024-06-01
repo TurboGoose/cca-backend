@@ -2,8 +2,6 @@ package ru.turbogoose.cca.backend.components.datasets;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
@@ -196,40 +194,17 @@ public class DatasetService {
                 .build();
     }
 
-    public DatasetTableInfoResponseDto getDatasetRenderInfo(int datasetId) {
+    public DatasetTableInfoResponseDto getDatasetTableInfo(int datasetId) {
         try {
             Dataset dataset = getDatasetByIdOrThrow(datasetId);
-            String headersInfo = dataset.getHeadersInfo();
-            if (headersInfo == null) {
-                ObjectNode headersInfoNode = objectMapper.createObjectNode();
-                headersInfoNode.putArray("excluded");
-                ArrayNode included = headersInfoNode.putArray("included");
-                included.add(composeFieldInfo("labels"));
-                getFieldNames(dataset).forEach(fieldName -> included.add(composeFieldInfo(fieldName)));
-                headersInfo = headersInfoNode.toString();
-                dataset.setHeadersInfo(headersInfo);
-                datasetRepository.save(dataset);
-            }
+            List<String> fieldNames = getFieldNames(dataset);
             return DatasetTableInfoResponseDto.builder()
                     .totalRows(dataset.getTotalRows())
-                    .headers(objectMapper.readTree(headersInfo))
+                    .headers(fieldNames)
                     .build();
         } catch (Exception exc) {
             throw new RuntimeException(exc);
         }
-    }
-
-    public void updateDatasetRenderInfo(int datasetId, String jsonTableInfo) {
-        Dataset dataset = getDatasetByIdOrThrow(datasetId);
-        dataset.setHeadersInfo(jsonTableInfo);
-        datasetRepository.save(dataset);
-    }
-
-    private JsonNode composeFieldInfo(String fieldName) {
-        ObjectNode node = objectMapper.createObjectNode();
-        node.put("name", fieldName);
-        node.put("width", "0");
-        return node;
     }
 
     private List<String> getFieldNames(Dataset dataset) {

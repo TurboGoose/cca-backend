@@ -4,6 +4,5 @@ CREATE TABLE IF NOT EXISTS datasets
     name         VARCHAR(100) UNIQUE NOT NULL,
     total_rows   BIGINT,
     size         BIGINT,
-    created      TIMESTAMP,
-    headers_info TEXT
+    created      TIMESTAMP
 )

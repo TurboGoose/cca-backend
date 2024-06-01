@@ -46,12 +46,7 @@ public class DatasetController {
 
     @GetMapping(value = "/{id}/table-info", produces = MediaType.APPLICATION_JSON_VALUE)
     public DatasetTableInfoResponseDto getTableInfo(@PathVariable int id) {
-        return datasetService.getDatasetRenderInfo(id);
-    }
-
-    @PutMapping(value = "/{id}/table-info")
-    public void updateTableInfo(@PathVariable int id, @RequestBody String jsonTableInfo) {
-        datasetService.updateDatasetRenderInfo(id, jsonTableInfo);
+        return datasetService.getDatasetTableInfo(id);
     }
 
     @PatchMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

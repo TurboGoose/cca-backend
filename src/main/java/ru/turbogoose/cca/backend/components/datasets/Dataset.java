@@ -27,7 +27,6 @@ public class Dataset {
     private Long totalRows;
     @Column(nullable = false)
     private LocalDateTime created;
-    private String headersInfo;
 
     @OneToMany(mappedBy = "dataset", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
