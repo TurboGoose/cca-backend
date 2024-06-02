@@ -1,7 +1,6 @@
 package ru.turbogoose.cca.backend.components.datasets;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
@@ -50,7 +49,6 @@ import static ru.turbogoose.cca.backend.components.storage.info.StorageStatus.RE
 @Slf4j
 @RequiredArgsConstructor
 public class DatasetService {
-    private static final ObjectMapper objectMapper = new ObjectMapper();
     private final ModelMapper mapper;
     private final DatasetRepository datasetRepository;
     private final AnnotationService annotationService;
