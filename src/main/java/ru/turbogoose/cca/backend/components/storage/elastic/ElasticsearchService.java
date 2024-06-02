@@ -115,7 +115,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
             refreshAsync(storageId);
         } catch (Exception exc) {
             deleteStorage(storageId);
-            throw new StorageException("Failed to fill storage",
+            throw new StorageException("Failed to fill the storage: " + exc.getMessage(),
                     "Failed to fill elastic storage " + storageId, exc);
         }
     }

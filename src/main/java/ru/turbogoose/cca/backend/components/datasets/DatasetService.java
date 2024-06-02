@@ -111,7 +111,7 @@ public class DatasetService {
 
         } catch (StorageException exc) {
             dataset.removeStorage(secondaryInfo);
-            datasetRepository.save(dataset);
+            datasetRepository.delete(dataset);
             log.debug("[{}] secondary storage deleted due to a filling error", dataset.getId());
             throw exc;
 
