@@ -1,9 +1,9 @@
 package ru.turbogoose.cca.backend.components.storage.filesystem;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -14,12 +14,9 @@ import ru.turbogoose.cca.backend.components.storage.exception.StorageException;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfo;
 import ru.turbogoose.cca.backend.components.storage.info.StorageInfoHelper;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Objects;
 import java.util.stream.Stream;
 
 import static ru.turbogoose.cca.backend.components.storage.info.StorageStatus.*;
@@ -29,14 +26,6 @@ import static ru.turbogoose.cca.backend.components.storage.info.StorageStatus.*;
 public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
     private final Path rootFolderPath;
     private final StorageInfoHelper storageInfoHelper;
-
-    @PreDestroy
-    public void clearTmp() { // TODO: remove!
-        String exclusion = "test_file.tmp";
-        Arrays.stream(Objects.requireNonNull(rootFolderPath.toFile().listFiles()))
-                .filter(file -> !file.getName().equals(exclusion))
-                .forEach(File::delete);
-    }
 
     public FileSystemTempCsvStorage(@Value("${storage.fstmp.folder:#{null}}") String rootFolderPath,
                                     StorageInfoHelper storageInfoHelper) {
@@ -79,7 +68,7 @@ public class FileSystemTempCsvStorage implements Storage<CSVRecord, JsonNode> {
             storageInfoHelper.setStatusAndSave(storageId, READY);
         } catch (Exception exc) {
             deleteStorage(storageId);
-            throw new StorageException("Failed to fill storage",
+            throw new StorageException("Failed to fill the storage: " + ExceptionUtils.getRootCauseMessage(exc),
                     "Failed to fill FS storage " + storageId, exc);
         }
     }
