@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.modelmapper.ModelMapper;
 import ru.turbogoose.cca.backend.components.annotations.model.Annotation;
-import ru.turbogoose.cca.backend.components.labels.LabelResponseDto;
+import ru.turbogoose.cca.backend.components.labels.dto.LabelDto;
 import ru.turbogoose.cca.backend.components.storage.exception.EnrichmentException;
 
 import java.io.IOException;
@@ -59,7 +59,7 @@ public class JsonEnricher implements AnnotationEnricher {
                 }
                 ArrayNode labels = (ArrayNode) dataObject.get("labels");
                 if (includeLabelIds) {
-                    labels.addPOJO(mapper.map(annotation.getLabel(), LabelResponseDto.class));
+                    labels.addPOJO(mapper.map(annotation.getLabel(), LabelDto.class));
                 } else {
                     labels.add(annotation.getLabel().getName());
                 }

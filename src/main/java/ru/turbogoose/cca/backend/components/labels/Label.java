@@ -18,6 +18,8 @@ public class Label {
     @Column(nullable = false)
     private String name;
 
+    private String color;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(nullable = false)
     private Dataset dataset;
