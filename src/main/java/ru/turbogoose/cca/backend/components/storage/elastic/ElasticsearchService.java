@@ -12,6 +12,7 @@ import co.elastic.clients.elasticsearch.core.search.HighlighterType;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.TotalHits;
 import co.elastic.clients.elasticsearch.indices.CreateIndexResponse;
+import co.elastic.clients.json.JsonData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -62,7 +63,8 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     public String create() {
         try {
             CreateIndexResponse response = esClient.indices().create(c -> c
-                    .index(UUID.randomUUID().toString()));
+                    .index(UUID.randomUUID().toString())
+            );
             String indexId = response.index();
             StorageInfo info = StorageInfo.builder()
                     .storageId(indexId)
@@ -138,7 +140,7 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
                             .size(downloadBatchSize)
                             .query(q1 -> q1
                                     .matchAll(m1 -> m1))
-                            .sort(so1 -> so1
+                            .sort(s -> s
                                     .field(FieldSort.of(f1 -> f1
                                             .field(TIE_BREAKER_ID)
                                             .order(SortOrder.Asc)))),
@@ -189,17 +191,25 @@ public class ElasticsearchService implements Searcher, Storage<JsonNode, JsonNod
     public Stream<JsonNode> getPage(String storageId, Pageable pageable) {
         assertStorageIsReady(storageId);
         try {
-            int from = (int) pageable.getOffset();
             int size = pageable.getPageSize();
+            int page = pageable.getPageNumber();
+            log.debug("Retrieving documents page {} (size: {})", page, size);
+            long offset = pageable.getOffset();
             SearchResponse<ObjectNode> response = esClient.search(g -> g
                             .index(storageId)
-                            .from(from) // FIXME: int instead of long!!
                             .size(size)
                             .query(q -> q
-                                    .matchAll(m -> m)),
+                                    .range(r -> r
+                                            .field(TIE_BREAKER_ID)
+                                            .gt(JsonData.of(offset))
+                                            .lte(JsonData.of(offset + size))))
+                            .sort(s -> s
+                                    .field(FieldSort.of(f1 -> f1
+                                            .field(TIE_BREAKER_ID)
+                                            .order(SortOrder.Asc)))),
                     ObjectNode.class
             );
-            log.info("Retrieving documents page {from: {}, size: {}} took {}", from, size, response.took());
+            log.debug("Retrieving documents page {} (size: {}) took {}", page, size, response.took());
             return extractHitsAndComposeResult(response);
         } catch (Exception exc) {
             throw new StorageException("Failed to retrieve result",
